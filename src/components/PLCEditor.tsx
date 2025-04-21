@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { editor } from "monaco-editor";
 import { configurePLCSyntaxHighlighting, getDefaultPLCCode } from "../utils/plcSyntaxHighlighting";
@@ -6,7 +5,10 @@ import { parsePLCCode, generatePLCopenXML } from "../utils/plcParser";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import { PLCFunctionBlock, PLCMethod, PLCProperty, PLCVariable, ParseError, ParserResult } from "../types/plc";
+import { usePLCCode } from "@/hooks/usePLCCode";
+import { useAuthStore } from "@/stores/auth";
 
 interface PLCEditorProps {
   darkMode: boolean;
@@ -31,7 +33,11 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
   const [xmlOutput, setXmlOutput] = useState<string>("");
   const [errorListVisible, setErrorListVisible] = useState<boolean>(false);
 
-  // Initialize Monaco Editor
+  const [title, setTitle] = useState<string>("Untitled");
+  const [activeCodeId, setActiveCodeId] = useState<string | null>(null);
+  const { plcCodes, savePLCCode, updatePLCCode, isLoading } = usePLCCode();
+  const user = useAuthStore((state) => state.user);
+
   useEffect(() => {
     if (!editorRef.current) return;
 
@@ -137,10 +143,48 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
     getProperty: "PROPERTY TemplateGetProperty : INT\nGET \n{\n  \n}\nEND_PROPERTY",
   };
 
+  // Handle save/update
+  const handleSave = async () => {
+    if (!user) return;
+    
+    const currentCode = monacoEditorRef.current?.getValue() || "";
+    
+    if (activeCodeId) {
+      updatePLCCode.mutate({ id: activeCodeId, code: currentCode, title });
+    } else {
+      savePLCCode.mutate({ code: currentCode, title });
+    }
+  };
+
+  // Load saved code
+  const loadCode = (codeEntry: { id: string; code: string; title: string }) => {
+    if (monacoEditorRef.current) {
+      monacoEditorRef.current.setValue(codeEntry.code);
+      setTitle(codeEntry.title);
+      setActiveCodeId(codeEntry.id);
+      
+      // Parse the loaded code
+      const result = parsePLCCode(codeEntry.code);
+      setParserResult(result);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Top Toolbar */}
       <div className="flex justify-between items-center p-2 bg-secondary border-b">
+        <div className="flex items-center space-x-2">
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-48"
+            placeholder="Enter title"
+          />
+          <Button variant="outline" size="sm" onClick={handleSave}>
+            {activeCodeId ? 'Update' : 'Save'}
+          </Button>
+        </div>
+
         <div className="flex space-x-2">
           <Button variant="outline" size="sm" onClick={() => insertTemplate(templates.functionBlock)}>
             + Function Block
@@ -172,8 +216,32 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
       
       {/* Main Content */}
       <div className="flex-grow flex overflow-hidden">
-        {/* Structure Tree View */}
+        {/* Saved Code List */}
         <div className="w-1/4 bg-background border-r overflow-auto p-2">
+          <div className="mb-4">
+            <h2 className="font-semibold mb-2">Saved Code</h2>
+            {isLoading ? (
+              <div className="text-sm text-muted-foreground">Loading...</div>
+            ) : (
+              <div className="space-y-2">
+                {plcCodes?.map((codeEntry) => (
+                  <div
+                    key={codeEntry.id}
+                    className={`p-2 rounded cursor-pointer hover:bg-secondary ${
+                      activeCodeId === codeEntry.id ? 'bg-secondary' : ''
+                    }`}
+                    onClick={() => loadCode(codeEntry)}
+                  >
+                    <div className="font-medium">{codeEntry.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Last updated: {new Date(codeEntry.updated_at).toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <h2 className="font-semibold mb-2">Structure</h2>
           
           {parserResult.functionBlocks.map((fb, fbIndex) => (
@@ -198,7 +266,7 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
                       className="text-sm cursor-pointer hover:bg-secondary rounded p-1"
                       onClick={() => setSelectedNode({ type: 'var', fbIndex, varIndex: vIndex })}
                     >
-                      <span className="text-xs text-muted-foreground">{v.scope}: </span>
+                      <span className="text-xs text-muted-foreground">{v.scope}: </span> 
                       {v.name}: {v.type}
                       {v.initialValue && <span className="text-xs text-muted-foreground"> := {v.initialValue}</span>}
                     </div>
