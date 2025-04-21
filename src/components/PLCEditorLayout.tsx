@@ -1,9 +1,12 @@
-
 import { useState, useEffect } from "react";
+import { useNavigate } from 'react-router-dom';
 import Split from "react-split";
 import PLCEditor from "./PLCEditor";
 import { Button } from "@/components/ui/button";
-import { Book, BookOpen, FileCode, FileText, ChevronDown, ChevronUp } from "lucide-react";
+import { Book, BookOpen, FileCode, FileText, ChevronDown, ChevronUp, LogOut } from "lucide-react";
+import { useAuthStore } from "@/stores/auth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/sonner";
 
 const PLCEditorLayout = () => {
   // Dark mode state with localStorage persistence
@@ -18,6 +21,20 @@ const PLCEditorLayout = () => {
     localStorage.setItem("plcEditorDarkMode", darkMode.toString());
   }, [darkMode]);
 
+  const user = useAuthStore((state) => state.user);
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    toast.success('Logged out successfully');
+    navigate('/auth');
+  };
+
+  if (!user) {
+    navigate('/auth');
+    return null;
+  }
+
   return (
     <div className={`min-h-screen bg-background flex flex-col ${darkMode ? "dark" : ""}`}>
       {/* Header Bar */}
@@ -30,7 +47,18 @@ const PLCEditorLayout = () => {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Dark Mode Toggle */}
+          <span className="text-sm text-muted-foreground mr-2">
+            {user.email}
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleLogout}
+            className="h-9 w-9"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="sr-only">Log out</span>
+          </Button>
           <Button
             variant="outline"
             size="icon"
