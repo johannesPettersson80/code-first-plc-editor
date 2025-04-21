@@ -1,0 +1,85 @@
+
+/* PLC Editor specific styles */
+
+/* Tree view styling */
+.plc-tree-node {
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.plc-tree-node:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.plc-tree-node.selected {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.dark .plc-tree-node:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark .plc-tree-node.selected {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Error highlight */
+.plc-error-line {
+  background-color: rgba(255, 0, 0, 0.1);
+  border-left: 3px solid red;
+}
+
+/* Syntax highlighting customizations */
+.dark-theme-token-keyword {
+  color: #569CD6;
+  font-weight: bold;
+}
+
+.dark-theme-token-type {
+  color: #4EC9B0;
+}
+
+.dark-theme-token-comment {
+  color: #608B4E;
+  font-style: italic;
+}
+
+.light-theme-token-keyword {
+  color: #0000FF;
+  font-weight: bold;
+}
+
+.light-theme-token-type {
+  color: #008000;
+}
+
+.light-theme-token-comment {
+  color: #008800;
+  font-style: italic;
+}
+
+/* Monaco editor overrides */
+.monaco-editor .monaco-scrollable-element {
+  border-radius: 4px;
+}
+
+/* Split panel handles */
+.gutter {
+  background-color: rgba(0, 0, 0, 0.1);
+  background-repeat: no-repeat;
+  background-position: 50%;
+}
+
+.gutter.gutter-horizontal {
+  cursor: col-resize;
+}
+
+.gutter.gutter-vertical {
+  cursor: row-resize;
+}
+
+.dark .gutter {
+  background-color: rgba(255, 255, 255, 0.1);
+}
