@@ -75,6 +75,21 @@
   color: #D4D4D4 !important;
 }
 
+/* Light mode specifics */
+.monaco-editor,
+.monaco-editor-background,
+.monaco-editor .inputarea.ime-input {
+  background-color: #FFFFFF !important;
+}
+
+.monaco-editor .margin {
+  background-color: #F5F5F5 !important;
+}
+
+.monaco-editor .view-line {
+  color: #000000 !important;
+}
+
 /* Split panel handles */
 .gutter {
   background-color: rgba(0, 0, 0, 0.1);

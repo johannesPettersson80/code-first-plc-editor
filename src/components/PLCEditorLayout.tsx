@@ -38,6 +38,10 @@ const PLCEditorLayout = () => {
     navigate('/auth');
   };
 
+  const toggleDarkMode = () => {
+    setDarkMode(prev => !prev);
+  };
+
   if (!user) {
     return null;
   }
@@ -69,7 +73,7 @@ const PLCEditorLayout = () => {
           <Button
             variant="outline"
             size="icon"
-            onClick={() => setDarkMode(!darkMode)}
+            onClick={toggleDarkMode}
             className="h-9 w-9"
           >
             {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

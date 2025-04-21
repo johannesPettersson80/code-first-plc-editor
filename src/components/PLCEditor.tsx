@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { editor } from "monaco-editor";
 import { configurePLCSyntaxHighlighting, getDefaultPLCCode } from "../utils/plcSyntaxHighlighting";
@@ -38,8 +39,15 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
   const { plcCodes, savePLCCode, updatePLCCode, isLoading } = usePLCCode();
   const user = useAuthStore((state) => state.user);
 
-  useEffect(() => {
+  // Function to create or recreate the editor
+  const createOrUpdateEditor = () => {
     if (!editorRef.current) return;
+    
+    // Clean up existing editor if it exists
+    if (monacoEditorRef.current) {
+      monacoEditorRef.current.dispose();
+      monacoEditorRef.current = null;
+    }
 
     // Import Monaco editor dynamically
     import("monaco-editor").then((monaco) => {
@@ -70,21 +78,29 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
           const result = parsePLCCode(newCode);
           setParserResult(result);
         });
-        
-        // Initial parse
-        const result = parsePLCCode(code);
-        setParserResult(result);
-      }
-      
-      // Update theme when dark mode changes
-      if (monacoEditorRef.current) {
-        monaco.editor.setTheme(darkMode ? "plcEditorDarkTheme" : "plcEditorTheme");
       }
     });
+  };
 
+  // Create editor on component mount
+  useEffect(() => {
+    createOrUpdateEditor();
+    
     return () => {
-      monacoEditorRef.current?.dispose();
+      // Cleanup on unmount
+      if (monacoEditorRef.current) {
+        monacoEditorRef.current.dispose();
+      }
     };
+  }, []); // Empty dependency array for mount/unmount only
+  
+  // Handle theme changes by recreating the editor
+  useEffect(() => {
+    createOrUpdateEditor();
+    
+    // Initial parse
+    const result = parsePLCCode(code);
+    setParserResult(result);
   }, [darkMode]);
   
   // Navigate to element when clicked in the tree
@@ -162,6 +178,7 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
       monacoEditorRef.current.setValue(codeEntry.code);
       setTitle(codeEntry.title);
       setActiveCodeId(codeEntry.id);
+      setCode(codeEntry.code);
       
       // Parse the loaded code
       const result = parsePLCCode(codeEntry.code);
