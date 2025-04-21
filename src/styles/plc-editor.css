@@ -33,36 +33,46 @@
 
 /* Syntax highlighting customizations */
 .dark-theme-token-keyword {
-  color: #569CD6;
-  font-weight: bold;
+  color: #569CD6 !important;
+  font-weight: bold !important;
 }
 
 .dark-theme-token-type {
-  color: #4EC9B0;
+  color: #4EC9B0 !important;
 }
 
 .dark-theme-token-comment {
-  color: #608B4E;
-  font-style: italic;
+  color: #608B4E !important;
+  font-style: italic !important;
 }
 
 .light-theme-token-keyword {
-  color: #0000FF;
-  font-weight: bold;
+  color: #0000FF !important;
+  font-weight: bold !important;
 }
 
 .light-theme-token-type {
-  color: #008000;
+  color: #008000 !important;
 }
 
 .light-theme-token-comment {
-  color: #008800;
-  font-style: italic;
+  color: #008800 !important;
+  font-style: italic !important;
 }
 
-/* Monaco editor overrides */
-.monaco-editor .monaco-scrollable-element {
-  border-radius: 4px;
+/* Monaco editor overrides - Make sure text is visible in dark mode */
+.dark .monaco-editor,
+.dark .monaco-editor-background,
+.dark .monaco-editor .inputarea.ime-input {
+  background-color: #1E1E1E !important;
+}
+
+.dark .monaco-editor .margin {
+  background-color: #1E1E1E !important;
+}
+
+.dark .monaco-editor .view-line {
+  color: #D4D4D4 !important;
 }
 
 /* Split panel handles */

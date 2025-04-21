@@ -1,9 +1,10 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import Split from "react-split";
 import PLCEditor from "./PLCEditor";
 import { Button } from "@/components/ui/button";
-import { Book, BookOpen, FileCode, FileText, ChevronDown, ChevronUp, LogOut } from "lucide-react";
+import { Book, BookOpen, FileCode, FileText, ChevronDown, ChevronUp, LogOut, Moon, Sun } from "lucide-react";
 import { useAuthStore } from "@/stores/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -24,6 +25,13 @@ const PLCEditorLayout = () => {
   const user = useAuthStore((state) => state.user);
   const navigate = useNavigate();
 
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!user) {
+      navigate('/auth');
+    }
+  }, [user, navigate]);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     toast.success('Logged out successfully');
@@ -31,7 +39,6 @@ const PLCEditorLayout = () => {
   };
 
   if (!user) {
-    navigate('/auth');
     return null;
   }
 
@@ -65,7 +72,7 @@ const PLCEditorLayout = () => {
             onClick={() => setDarkMode(!darkMode)}
             className="h-9 w-9"
           >
-            {darkMode ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             <span className="sr-only">Toggle theme</span>
           </Button>
         </div>
