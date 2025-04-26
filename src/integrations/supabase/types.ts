@@ -9,6 +9,27 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      custom_users: {
+        Row: {
+          auth_user_id: string | null
+          created_at: string | null
+          id: number
+          profile_data: Json | null
+        }
+        Insert: {
+          auth_user_id?: string | null
+          created_at?: string | null
+          id?: never
+          profile_data?: Json | null
+        }
+        Update: {
+          auth_user_id?: string | null
+          created_at?: string | null
+          id?: never
+          profile_data?: Json | null
+        }
+        Relationships: []
+      }
       plc_code: {
         Row: {
           code: string
