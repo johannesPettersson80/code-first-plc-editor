@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/components/ui/sonner';
 import { Lock, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -14,30 +15,40 @@ const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [isResetPassword, setIsResetPassword] = useState(false);
+  const [showRecoveryForm, setShowRecoveryForm] = useState(false);
+  const [recoveryError, setRecoveryError] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
 
   // Handle auth state changes and process recovery tokens
   useEffect(() => {
-    // Check for access token in URL hash (password recovery flow)
-    const handleRecoveryToken = async () => {
+    // Check if user is already logged in
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        navigate('/');
+      }
+    };
+    checkSession();
+    
+    // Handle recovery token from URL hash
+    const processRecoveryToken = () => {
       const hash = window.location.hash;
       if (hash && hash.includes('access_token') && hash.includes('type=recovery')) {
         try {
           // Remove the hash to clean up the URL
           window.history.replaceState({}, document.title, window.location.pathname);
           
-          // Show toast indicating successful recovery link usage
+          // Show the password reset form
+          setShowRecoveryForm(true);
           toast.success('You can now set a new password');
-          
-          // We're already authenticated with the recovery token, just inform the user they can set a new password
-          setIsResetPassword(false); // Switch to the password form
         } catch (error) {
+          setRecoveryError('There was a problem processing the recovery link');
           toast.error('There was a problem processing the recovery link');
         }
       }
     };
-
+    
     // Handle URL error parameters for expired tokens etc
     const handleErrorParams = () => {
       const url = new URL(window.location.href);
@@ -50,23 +61,18 @@ const Auth = () => {
         
         // Show appropriate error message
         if (errorParam === 'access_denied' && errorDescription?.includes('expired')) {
+          setRecoveryError('Password reset link has expired. Please request a new one.');
           toast.error('Password reset link has expired. Please request a new one.');
           setIsResetPassword(true);
         } else {
+          setRecoveryError(errorDescription || 'An error occurred. Please try again.');
           toast.error(errorDescription || 'An error occurred. Please try again.');
         }
       }
     };
 
-    handleRecoveryToken();
+    processRecoveryToken();
     handleErrorParams();
-    
-    // Check if user is already logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate('/');
-      }
-    });
   }, [navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -75,13 +81,15 @@ const Auth = () => {
 
     try {
       if (isResetPassword) {
+        // Reset password flow
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth`,
+          redirectTo: window.location.origin + '/auth',
         });
         if (error) throw error;
         toast.success('Check your email for the password reset link');
         setIsResetPassword(false);
       } else if (isSignUp) {
+        // Sign up flow
         const { error, data } = await supabase.auth.signUp({
           email,
           password,
@@ -97,6 +105,7 @@ const Auth = () => {
           toast.success('Check your email to confirm your account');
         }
       } else {
+        // Sign in flow
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -130,16 +139,17 @@ const Auth = () => {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       toast.success('Password updated successfully');
-      navigate('/');
+      
+      // Short delay before navigating to allow the user to see the success message
+      setTimeout(() => {
+        navigate('/');
+      }, 1500);
     } catch (error) {
       toast.error(error.message);
     } finally {
       setIsLoading(false);
     }
   };
-
-  // Check if we're in recovery mode after clicking a valid recovery link
-  const isRecoveryMode = location.hash && location.hash.includes('access_token') && location.hash.includes('type=recovery');
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -149,7 +159,7 @@ const Auth = () => {
             <Lock className="h-8 w-8" />
           </div>
           <CardTitle>
-            {isRecoveryMode
+            {showRecoveryForm
               ? 'Set New Password'
               : isResetPassword
               ? 'Reset Password'
@@ -158,7 +168,7 @@ const Auth = () => {
               : 'Welcome Back'}
           </CardTitle>
           <CardDescription>
-            {isRecoveryMode
+            {showRecoveryForm
               ? 'Enter your new password below'
               : isResetPassword
               ? 'Enter your email to receive a password reset link'
@@ -168,7 +178,14 @@ const Auth = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isRecoveryMode ? (
+          {recoveryError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{recoveryError}</AlertDescription>
+            </Alert>
+          )}
+          
+          {showRecoveryForm ? (
             <form onSubmit={handleUpdatePassword} className="space-y-4">
               <div className="space-y-2">
                 <Input
@@ -177,6 +194,7 @@ const Auth = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  minLength={6}
                 />
               </div>
               <Button type="submit" className="w-full" disabled={isLoading}>
@@ -220,6 +238,7 @@ const Auth = () => {
                   onClick={() => {
                     setIsResetPassword(false);
                     setIsSignUp(!isSignUp);
+                    setRecoveryError('');
                   }}
                 >
                   {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
@@ -229,7 +248,10 @@ const Auth = () => {
                     type="button"
                     variant="ghost"
                     className="w-full"
-                    onClick={() => setIsResetPassword(true)}
+                    onClick={() => {
+                      setIsResetPassword(true);
+                      setRecoveryError('');
+                    }}
                   >
                     Forgot your password?
                   </Button>
@@ -239,7 +261,10 @@ const Auth = () => {
                     type="button"
                     variant="ghost"
                     className="w-full"
-                    onClick={() => setIsResetPassword(false)}
+                    onClick={() => {
+                      setIsResetPassword(false);
+                      setRecoveryError('');
+                    }}
                   >
                     Back to Sign In
                   </Button>
