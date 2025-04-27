@@ -1,12 +1,12 @@
 
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/components/ui/sonner';
-import { Lock } from 'lucide-react';
+import { Lock, AlertCircle } from 'lucide-react';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -15,6 +15,27 @@ const Auth = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [isResetPassword, setIsResetPassword] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Parse error messages from URL parameters
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const errorParam = url.hash ? new URLSearchParams(url.hash.substring(1)).get('error') : null;
+    const errorDescription = url.hash ? new URLSearchParams(url.hash.substring(1)).get('error_description') : null;
+    
+    if (errorParam) {
+      // Replace URL without error parameters to prevent showing the error again on refresh
+      window.history.replaceState({}, document.title, '/auth');
+      
+      // Show appropriate error message
+      if (errorParam === 'access_denied' && errorDescription?.includes('expired')) {
+        toast.error('Password reset link has expired. Please request a new one.');
+        setIsResetPassword(true);
+      } else {
+        toast.error(errorDescription || 'An error occurred. Please try again.');
+      }
+    }
+  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,19 +50,34 @@ const Auth = () => {
         toast.success('Check your email for the password reset link');
         setIsResetPassword(false);
       } else if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        const { error, data } = await supabase.auth.signUp({
           email,
           password,
         });
-        if (error) throw error;
-        toast.success('Check your email to confirm your account');
+        
+        if (error) {
+          if (error.message.includes('already registered')) {
+            toast.error('This email is already registered. Please sign in instead.');
+          } else {
+            throw error;
+          }
+        } else {
+          toast.success('Check your email to confirm your account');
+        }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
-        if (error) throw error;
-        navigate('/');
+        if (error) {
+          if (error.message.includes('Invalid login')) {
+            toast.error('Invalid email or password. Please try again.');
+          } else {
+            throw error;
+          }
+        } else {
+          navigate('/');
+        }
       }
     } catch (error) {
       toast.error(error.message);
