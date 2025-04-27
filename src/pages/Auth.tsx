@@ -17,25 +17,57 @@ const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Parse error messages from URL parameters
+  // Handle auth state changes and process recovery tokens
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const errorParam = url.hash ? new URLSearchParams(url.hash.substring(1)).get('error') : null;
-    const errorDescription = url.hash ? new URLSearchParams(url.hash.substring(1)).get('error_description') : null;
-    
-    if (errorParam) {
-      // Replace URL without error parameters to prevent showing the error again on refresh
-      window.history.replaceState({}, document.title, '/auth');
-      
-      // Show appropriate error message
-      if (errorParam === 'access_denied' && errorDescription?.includes('expired')) {
-        toast.error('Password reset link has expired. Please request a new one.');
-        setIsResetPassword(true);
-      } else {
-        toast.error(errorDescription || 'An error occurred. Please try again.');
+    // Check for access token in URL hash (password recovery flow)
+    const handleRecoveryToken = async () => {
+      const hash = window.location.hash;
+      if (hash && hash.includes('access_token') && hash.includes('type=recovery')) {
+        try {
+          // Remove the hash to clean up the URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+          
+          // Show toast indicating successful recovery link usage
+          toast.success('You can now set a new password');
+          
+          // We're already authenticated with the recovery token, just inform the user they can set a new password
+          setIsResetPassword(false); // Switch to the password form
+        } catch (error) {
+          toast.error('There was a problem processing the recovery link');
+        }
       }
-    }
-  }, []);
+    };
+
+    // Handle URL error parameters for expired tokens etc
+    const handleErrorParams = () => {
+      const url = new URL(window.location.href);
+      const errorParam = url.hash ? new URLSearchParams(url.hash.substring(1)).get('error') : null;
+      const errorDescription = url.hash ? new URLSearchParams(url.hash.substring(1)).get('error_description') : null;
+      
+      if (errorParam) {
+        // Replace URL without error parameters to prevent showing the error again on refresh
+        window.history.replaceState({}, document.title, '/auth');
+        
+        // Show appropriate error message
+        if (errorParam === 'access_denied' && errorDescription?.includes('expired')) {
+          toast.error('Password reset link has expired. Please request a new one.');
+          setIsResetPassword(true);
+        } else {
+          toast.error(errorDescription || 'An error occurred. Please try again.');
+        }
+      }
+    };
+
+    handleRecoveryToken();
+    handleErrorParams();
+    
+    // Check if user is already logged in
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        navigate('/');
+      }
+    });
+  }, [navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,7 +76,7 @@ const Auth = () => {
     try {
       if (isResetPassword) {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin + '/auth',
+          redirectTo: `${window.location.origin}/auth`,
         });
         if (error) throw error;
         toast.success('Check your email for the password reset link');
@@ -86,6 +118,29 @@ const Auth = () => {
     }
   };
 
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!password || password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      toast.success('Password updated successfully');
+      navigate('/');
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Check if we're in recovery mode after clicking a valid recovery link
+  const isRecoveryMode = location.hash && location.hash.includes('access_token') && location.hash.includes('type=recovery');
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
@@ -94,14 +149,18 @@ const Auth = () => {
             <Lock className="h-8 w-8" />
           </div>
           <CardTitle>
-            {isResetPassword
+            {isRecoveryMode
+              ? 'Set New Password'
+              : isResetPassword
               ? 'Reset Password'
               : isSignUp
               ? 'Create Account'
               : 'Welcome Back'}
           </CardTitle>
           <CardDescription>
-            {isResetPassword
+            {isRecoveryMode
+              ? 'Enter your new password below'
+              : isResetPassword
               ? 'Enter your email to receive a password reset link'
               : isSignUp
               ? 'Sign up to save and manage your PLC code'
@@ -109,68 +168,85 @@ const Auth = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleAuth} className="space-y-4">
-            <div className="space-y-2">
-              <Input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              {!isResetPassword && (
+          {isRecoveryMode ? (
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <div className="space-y-2">
                 <Input
                   type="password"
-                  placeholder="Password"
+                  placeholder="New Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
-              )}
-            </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading
-                ? 'Loading...'
-                : isResetPassword
-                ? 'Send Reset Link'
-                : isSignUp
-                ? 'Sign Up'
-                : 'Sign In'}
-            </Button>
-            <div className="flex flex-col gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full"
-                onClick={() => {
-                  setIsResetPassword(false);
-                  setIsSignUp(!isSignUp);
-                }}
-              >
-                {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Processing...' : 'Update Password'}
               </Button>
-              {!isResetPassword && !isSignUp && (
+            </form>
+          ) : (
+            <form onSubmit={handleAuth} className="space-y-4">
+              <div className="space-y-2">
+                <Input
+                  type="email"
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+                {!isResetPassword && (
+                  <Input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                )}
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading
+                  ? 'Loading...'
+                  : isResetPassword
+                  ? 'Send Reset Link'
+                  : isSignUp
+                  ? 'Sign Up'
+                  : 'Sign In'}
+              </Button>
+              <div className="flex flex-col gap-2">
                 <Button
                   type="button"
                   variant="ghost"
                   className="w-full"
-                  onClick={() => setIsResetPassword(true)}
+                  onClick={() => {
+                    setIsResetPassword(false);
+                    setIsSignUp(!isSignUp);
+                  }}
                 >
-                  Forgot your password?
+                  {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
                 </Button>
-              )}
-              {isResetPassword && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full"
-                  onClick={() => setIsResetPassword(false)}
-                >
-                  Back to Sign In
-                </Button>
-              )}
-            </div>
-          </form>
+                {!isResetPassword && !isSignUp && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => setIsResetPassword(true)}
+                  >
+                    Forgot your password?
+                  </Button>
+                )}
+                {isResetPassword && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => setIsResetPassword(false)}
+                  >
+                    Back to Sign In
+                  </Button>
+                )}
+              </div>
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>
