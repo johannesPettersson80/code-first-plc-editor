@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/components/ui/sonner';
-import { Lock, AlertCircle } from 'lucide-react';
+import { Lock, AlertCircle, Shield } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const Auth = () => {
@@ -17,8 +17,13 @@ const Auth = () => {
   const [isResetPassword, setIsResetPassword] = useState(false);
   const [showRecoveryForm, setShowRecoveryForm] = useState(false);
   const [recoveryError, setRecoveryError] = useState('');
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // ADMIN CREDENTIALS FOR DEVELOPMENT ACCESS
+  const ADMIN_EMAIL = 'admin@example.com';
+  const ADMIN_PASSWORD = 'adminaccess123';
 
   // Handle auth state changes and process recovery tokens
   useEffect(() => {
@@ -105,19 +110,53 @@ const Auth = () => {
           toast.success('Check your email to confirm your account');
         }
       } else {
-        // Sign in flow
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) {
-          if (error.message.includes('Invalid login')) {
-            toast.error('Invalid email or password. Please try again.');
+        // Handle admin login shortcut
+        if (showAdminLogin && email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+          // For admin login, we'll create a custom sign-in that works for development
+          const { error } = await supabase.auth.signInWithPassword({
+            email: ADMIN_EMAIL,
+            password: ADMIN_PASSWORD,
+          });
+          
+          if (error) {
+            // If admin login fails with password auth, try creating an account
+            const { error: signUpError } = await supabase.auth.signUp({
+              email: ADMIN_EMAIL,
+              password: ADMIN_PASSWORD,
+            });
+            
+            if (signUpError) {
+              throw signUpError;
+            } else {
+              // Try signing in again after creating the account
+              const { error: retryError } = await supabase.auth.signInWithPassword({
+                email: ADMIN_EMAIL,
+                password: ADMIN_PASSWORD,
+              });
+              
+              if (retryError) throw retryError;
+              toast.success('Logged in as admin');
+              navigate('/');
+            }
           } else {
-            throw error;
+            toast.success('Logged in as admin');
+            navigate('/');
           }
         } else {
-          navigate('/');
+          // Regular sign in flow
+          const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (error) {
+            if (error.message.includes('Invalid login')) {
+              toast.error('Invalid email or password. Please try again.');
+            } else {
+              throw error;
+            }
+          } else {
+            navigate('/');
+          }
         }
       }
     } catch (error) {
@@ -151,18 +190,31 @@ const Auth = () => {
     }
   };
 
+  const toggleAdminLogin = () => {
+    setShowAdminLogin(!showAdminLogin);
+    if (!showAdminLogin) {
+      setEmail(ADMIN_EMAIL);
+      setPassword(ADMIN_PASSWORD);
+    } else {
+      setEmail('');
+      setPassword('');
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <div className="flex items-center justify-center mb-4">
-            <Lock className="h-8 w-8" />
+            {showAdminLogin ? <Shield className="h-8 w-8 text-red-500" /> : <Lock className="h-8 w-8" />}
           </div>
           <CardTitle>
             {showRecoveryForm
               ? 'Set New Password'
               : isResetPassword
               ? 'Reset Password'
+              : showAdminLogin
+              ? 'Admin Access'
               : isSignUp
               ? 'Create Account'
               : 'Welcome Back'}
@@ -172,6 +224,8 @@ const Auth = () => {
               ? 'Enter your new password below'
               : isResetPassword
               ? 'Enter your email to receive a password reset link'
+              : showAdminLogin
+              ? 'Sign in with admin credentials'
               : isSignUp
               ? 'Sign up to save and manage your PLC code'
               : 'Sign in to access your PLC code'}
@@ -221,28 +275,37 @@ const Auth = () => {
                   />
                 )}
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button 
+                type="submit" 
+                className={`w-full ${showAdminLogin ? 'bg-red-600 hover:bg-red-700' : ''}`}
+                disabled={isLoading}
+              >
                 {isLoading
                   ? 'Loading...'
                   : isResetPassword
                   ? 'Send Reset Link'
+                  : showAdminLogin
+                  ? 'Admin Login'
                   : isSignUp
                   ? 'Sign Up'
                   : 'Sign In'}
               </Button>
               <div className="flex flex-col gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full"
-                  onClick={() => {
-                    setIsResetPassword(false);
-                    setIsSignUp(!isSignUp);
-                    setRecoveryError('');
-                  }}
-                >
-                  {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
-                </Button>
+                {!showAdminLogin && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => {
+                      setIsResetPassword(false);
+                      setIsSignUp(!isSignUp);
+                      setRecoveryError('');
+                    }}
+                  >
+                    {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+                  </Button>
+                )}
+                
                 {!isResetPassword && !isSignUp && (
                   <Button
                     type="button"
@@ -256,6 +319,7 @@ const Auth = () => {
                     Forgot your password?
                   </Button>
                 )}
+                
                 {isResetPassword && (
                   <Button
                     type="button"
@@ -269,6 +333,15 @@ const Auth = () => {
                     Back to Sign In
                   </Button>
                 )}
+                
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={`w-full mt-4 ${showAdminLogin ? 'border-red-500 text-red-500' : ''}`}
+                  onClick={toggleAdminLogin}
+                >
+                  {showAdminLogin ? 'Back to Regular Login' : 'Use Admin Login'}
+                </Button>
               </div>
             </form>
           )}
