@@ -8,7 +8,7 @@ interface CodeStructureProps {
   functions: PLCFunction[]; // Add functions prop
   selectedNode: any;
   setSelectedNode: (node: any) => void;
-  navigateToElement: (lineNumber: number) => void;
+  onNavigate: (lineNumber: number) => void; // Renamed prop for clarity
 }
 
 export const CodeStructure = ({
@@ -17,7 +17,7 @@ export const CodeStructure = ({
   functions, // Destructure functions
   selectedNode,
   setSelectedNode,
-  navigateToElement
+  onNavigate
 }: CodeStructureProps) => {
   const projectName = "PLC Project"; // In a real app, this would come from props
   const [isProjectExpanded, setIsProjectExpanded] = useState(true);
@@ -59,7 +59,7 @@ export const CodeStructure = ({
   };
 
   return (
-    <div className="w-1/4 bg-background border-r overflow-auto p-2">
+    <div className="w-full h-full bg-background border-r overflow-auto p-2">
       <h2 className="font-semibold mb-2">Structure</h2>
 
       {/* Project Level */}
@@ -87,7 +87,7 @@ export const CodeStructure = ({
                   }`}
                   onClick={() => {
                     setSelectedNode({ type: 'fb', index: fbIndex });
-                    navigateToElement(fb.lineNumber);
+                    if (fb.lineNumber > 0) onNavigate(fb.lineNumber); // Navigate if line number exists
                   }}
                 >
                   <Database className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
@@ -124,7 +124,7 @@ export const CodeStructure = ({
                           }`}
                           onClick={() => {
                             setSelectedNode({ type: 'method', path: ['fb', fbIndex, 'method', methodIndex] });
-                            navigateToElement(method.lineNumber);
+                            if (method.lineNumber > 0) onNavigate(method.lineNumber); // Navigate if line number exists
                           }}
                         >
                            <FunctionSquare className="w-3 h-3 text-purple-500 flex-shrink-0" />
@@ -140,7 +140,7 @@ export const CodeStructure = ({
                                 statement={statement}
                                 selectedNode={selectedNode}
                                 setSelectedNode={setSelectedNode}
-                                navigateToElement={navigateToElement}
+                                onNavigate={onNavigate} // Pass down onNavigate
                                 path={['fb', fbIndex, 'method', methodIndex, 'stmt', stmtIndex]} // More specific path
                               />
                             ))}
@@ -165,7 +165,7 @@ export const CodeStructure = ({
                             }`}
                             onClick={() => {
                               setSelectedNode({ type: 'property', path: ['fb', fbIndex, 'prop', propIndex] });
-                              navigateToElement(prop.lineNumber);
+                              if (prop.lineNumber > 0) onNavigate(prop.lineNumber); // Navigate if line number exists
                             }}
                           >
                              {/* Add an icon for properties? */}
@@ -184,7 +184,7 @@ export const CodeStructure = ({
                                   statement={statement}
                                   selectedNode={selectedNode}
                                   setSelectedNode={setSelectedNode}
-                                  navigateToElement={navigateToElement}
+                                  onNavigate={onNavigate} // Pass down onNavigate
                                   path={['fb', fbIndex, 'prop', propIndex, 'stmt', stmtIndex]} // More specific path
                                 />
                               ))}
@@ -207,7 +207,7 @@ export const CodeStructure = ({
                   }`}
                   onClick={() => {
                     setSelectedNode({ type: 'program', index: progIndex });
-                    navigateToElement(prog.lineNumber);
+                    if (prog.lineNumber > 0) onNavigate(prog.lineNumber); // Navigate if line number exists
                   }}
                 >
                   <FileCode className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
@@ -240,7 +240,7 @@ export const CodeStructure = ({
                                statement={statement}
                                selectedNode={selectedNode}
                                setSelectedNode={setSelectedNode}
-                               navigateToElement={navigateToElement}
+                               onNavigate={onNavigate} // Pass down onNavigate
                                path={['program', progIndex, 'stmt', stmtIndex]}
                              />
                           ))}
@@ -259,7 +259,7 @@ export const CodeStructure = ({
                    }`}
                    onClick={() => {
                      setSelectedNode({ type: 'function', index: funcIndex });
-                     navigateToElement(func.lineNumber);
+                     if (func.lineNumber > 0) onNavigate(func.lineNumber); // Navigate if line number exists
                    }}
                  >
                    <FunctionSquare className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
@@ -312,7 +312,7 @@ export const CodeStructure = ({
                                 statement={statement}
                                 selectedNode={selectedNode}
                                 setSelectedNode={setSelectedNode}
-                                navigateToElement={navigateToElement}
+                                onNavigate={onNavigate} // Pass down onNavigate
                                 path={['function', funcIndex, 'stmt', stmtIndex]}
                               />
                            ))}
@@ -362,11 +362,11 @@ const VariableNode = ({ variable, selectedNode, setSelectedNode, highlightVariab
 
 
 // Helper component to render different statement types
-const StatementNode = ({ statement, selectedNode, setSelectedNode, navigateToElement, path }: {
+const StatementNode = ({ statement, selectedNode, setSelectedNode, onNavigate, path }: {
   statement: PLCStatement;
   selectedNode: any;
   setSelectedNode: (node: any) => void;
-  navigateToElement: (lineNumber: number) => void;
+  onNavigate: (lineNumber: number) => void; // Use onNavigate here too for consistency
   path: (string | number)[]; // Array of strings/indices to uniquely identify the node
 }) => {
   // Construct a unique ID for the statement node for selection tracking
@@ -375,7 +375,7 @@ const StatementNode = ({ statement, selectedNode, setSelectedNode, navigateToEle
 
   const handleClick = () => {
     setSelectedNode({ type: 'statement', id: nodeId, path }); // Store the generated ID and path
-    navigateToElement(statement.lineNumber); // Navigate to statement line
+    if (statement.lineNumber > 0) onNavigate(statement.lineNumber); // Navigate to statement line
   };
 
   if (statement.type === 'assignment') {
@@ -405,7 +405,7 @@ const StatementNode = ({ statement, selectedNode, setSelectedNode, navigateToEle
                 statement={thenStmt}
                 selectedNode={selectedNode}
                 setSelectedNode={setSelectedNode}
-                navigateToElement={navigateToElement}
+                onNavigate={onNavigate}
                 path={[...path, 'then', thenIndex]} // Append index for nested path
               />
             ))}
@@ -417,7 +417,7 @@ const StatementNode = ({ statement, selectedNode, setSelectedNode, navigateToEle
             <div key={elsifIndex} className="flex flex-col"> {/* Key prop is correctly placed here */}
               <div
                 className={`text-xs cursor-pointer hover:bg-secondary rounded p-1 ${isSelected ? 'bg-secondary' : ''}`} // Selection might need refinement for ELSIF/ELSE
-                onClick={() => navigateToElement(elsifBlock.statements[0]?.lineNumber || statement.lineNumber)} // Navigate to first statement or IF line
+                onClick={() => onNavigate(elsifBlock.statements[0]?.lineNumber || statement.lineNumber)} // Navigate to first statement or IF line
               >
                 ELSIF {elsifBlock.condition} THEN
               </div>
@@ -429,7 +429,7 @@ const StatementNode = ({ statement, selectedNode, setSelectedNode, navigateToEle
                       statement={elsifStmt}
                       selectedNode={selectedNode}
                       setSelectedNode={setSelectedNode}
-                      navigateToElement={navigateToElement}
+                      onNavigate={onNavigate}
                       path={[...path, 'elsif', elsifIndex, innerIndex]} // Append indices for nested path
                     />
                   ))}
@@ -443,7 +443,7 @@ const StatementNode = ({ statement, selectedNode, setSelectedNode, navigateToEle
            <div key="else-block" className="flex flex-col"> {/* Add a key for the ELSE block */}
               <div
                  className={`text-xs cursor-pointer hover:bg-secondary rounded p-1 ${isSelected ? 'bg-secondary' : ''}`} // Selection might need refinement for ELSIF/ELSE
-                 onClick={() => navigateToElement(statement.elseStatements[0]?.lineNumber || statement.lineNumber)} // Navigate to first statement or IF line
+                 onClick={() => onNavigate(statement.elseStatements[0]?.lineNumber || statement.lineNumber)} // Navigate to first statement or IF line
               >
                  ELSE
               </div>
@@ -454,7 +454,7 @@ const StatementNode = ({ statement, selectedNode, setSelectedNode, navigateToEle
                        statement={elseStmt}
                        selectedNode={selectedNode}
                        setSelectedNode={setSelectedNode}
-                       navigateToElement={navigateToElement}
+                       onNavigate={onNavigate}
                        path={[...path, 'else', innerIndex]} // Append index for nested path
                     />
                  ))}
@@ -463,7 +463,7 @@ const StatementNode = ({ statement, selectedNode, setSelectedNode, navigateToEle
         )}
         <div
            className={`text-xs cursor-pointer hover:bg-secondary rounded p-1 ${isSelected ? 'bg-secondary' : ''}`} // Selection might need refinement for END_IF
-           onClick={() => navigateToElement(statement.lineNumber)} // Navigate back to IF line for END_IF
+           onClick={() => onNavigate(statement.lineNumber)} // Navigate back to IF line for END_IF
         >
            END_IF
         </div>

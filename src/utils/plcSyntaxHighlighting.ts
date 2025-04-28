@@ -121,14 +121,14 @@ export const configurePLCSyntaxHighlighting = (monaco: any) => {
     base: 'vs',
     inherit: true,
     rules: [
-      { token: 'keyword', foreground: '0000FF', fontStyle: 'bold' },
-      { token: 'type', foreground: '008000' },
-      { token: 'comment', foreground: '008800', fontStyle: 'italic' },
-      { token: 'string', foreground: 'A31515' },
-      { token: 'identifier', foreground: '000000' },
-      { token: 'number', foreground: '098658' },
-      { token: 'delimiter', foreground: '000000' },
-      { token: 'operator', foreground: '000000' },
+      { token: 'keyword', foreground: '569CD6', fontStyle: 'bold' }, // VS Code Blue
+      { token: 'type', foreground: '4EC9B0' }, // VS Code Teal
+      { token: 'comment', foreground: '6A9955', fontStyle: 'italic' }, // VS Code Green
+      { token: 'string', foreground: 'CE9178' }, // VS Code Orange/Brown
+      { token: 'identifier', foreground: '333333' }, // Dark Gray
+      { token: 'number', foreground: 'B5CEA8' }, // VS Code Light Green/Number
+      { token: 'delimiter', foreground: '666666' }, // Medium Gray
+      { token: 'operator', foreground: '777777' }, // Gray
     ],
     colors: {
       'editor.foreground': '#000000',

@@ -35,12 +35,12 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
     errors: []
   });
   const [selectedNode, setSelectedNode] = useState<any | null>(null);
-  
+
   const getInitialCode = () => {
     const storedCode = localStorage.getItem("plcEditorCode");
     return storedCode || getDefaultPLCCode();
   };
-  
+
   const [code, setCode] = useState<string>(getInitialCode());
   const [xmlOutput, setXmlOutput] = useState<string>("");
   const [errorListVisible, setErrorListVisible] = useState<boolean>(false);
@@ -49,12 +49,12 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
   const [activeCodeId, setActiveCodeId] = useState<string | null>(null);
   const { plcCodes, savePLCCode, updatePLCCode, deletePLCCode, duplicatePLCCode, isLoading } = usePLCCode();
   const user = useAuthStore((state) => state.user);
-  
+
   const [isAutoSaveEnabled, setIsAutoSaveEnabled] = useState<boolean>(true);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const autoSaveTimerRef = useRef<number | null>(null);
-  
+
   const [unsavedChanges, setUnsavedChanges] = useState(false);
   const [pendingOperation, setPendingOperation] = useState<{
     type: 'new' | 'open';
@@ -64,7 +64,7 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
 
   const createOrUpdateEditor = () => {
     if (!editorRef.current) return;
-    
+
     if (monacoEditorRef.current) {
       monacoEditorRef.current.dispose();
       monacoEditorRef.current = null;
@@ -72,12 +72,12 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
 
     import("monaco-editor").then((monaco) => {
       configurePLCSyntaxHighlighting(monaco);
-      
+
       if (!monacoEditorRef.current && editorRef.current) {
         monacoEditorRef.current = monaco.editor.create(editorRef.current, {
           value: code,
           language: "plcStructuredText",
-          theme: darkMode ? "plcEditorDarkTheme" : "plcEditorTheme",
+          theme: "plcEditorTheme", // Use custom PLC theme
           automaticLayout: true,
           minimap: { enabled: true },
           scrollBeyondLastLine: false,
@@ -391,10 +391,10 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
           setCode(newCode);
           localStorage.setItem("plcEditorCode", newCode);
           setUnsavedChanges(true);
-          
+
           const result = parsePLCCode(newCode);
           setParserResult(result);
-          
+
           if (isAutoSaveEnabled && user) {
             if (autoSaveTimerRef.current) {
               window.clearTimeout(autoSaveTimerRef.current);
@@ -416,9 +416,35 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
     });
   };
 
+  const handleSave = async () => {
+    if (!user) return;
+
+    setIsSaving(true);
+    const currentCode = monacoEditorRef.current?.getValue() || "";
+
+    try {
+      if (activeCodeId) {
+        await updatePLCCode.mutateAsync({ id: activeCodeId, code: currentCode, title });
+      } else {
+        const saved = await savePLCCode.mutateAsync({ code: currentCode, title });
+        if (saved) {
+          setActiveCodeId(saved.id);
+        }
+      }
+      setLastSaved(new Date());
+      setUnsavedChanges(false);
+      toast.success("Saved successfully");
+    } catch (error) {
+      console.error("Save failed:", error);
+      toast.error("Failed to save");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   useEffect(() => {
     createOrUpdateEditor();
-    
+
     return () => {
       if (monacoEditorRef.current) {
         monacoEditorRef.current.dispose();
@@ -436,7 +462,7 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
         handleSave();
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
@@ -445,16 +471,16 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
 
   useEffect(() => {
     createOrUpdateEditor();
-    
+
     const result = parsePLCCode(code);
     setParserResult(result);
   }, [darkMode]);
 
   const handleAutoSave = async (newCode: string) => {
     if (!user || !isAutoSaveEnabled || isLoading) return;
-    
+
     setIsSaving(true);
-    
+
     try {
       if (activeCodeId) {
         await updatePLCCode.mutateAsync({ id: activeCodeId, code: newCode, title });
@@ -483,7 +509,7 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
       setPendingOperation({ type: 'open', data: file });
       return;
     }
-    
+
     setActiveCodeId(file.id);
     setTitle(file.title);
     setCode(file.code);
@@ -491,10 +517,10 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
       monacoEditorRef.current.setValue(file.code);
     }
     setUnsavedChanges(false);
-    
+
     const result = parsePLCCode(file.code);
     setParserResult(result);
-    
+
     toast.success(`Loaded "${file.title}"`);
   };
 
@@ -503,7 +529,7 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
       setPendingOperation({ type: 'new' });
       return;
     }
-    
+
     setActiveCodeId(null);
     setTitle("Untitled");
     const defaultCode = getDefaultPLCCode();
@@ -512,16 +538,16 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
       monacoEditorRef.current.setValue(defaultCode);
     }
     setUnsavedChanges(false);
-    
+
     const result = parsePLCCode(defaultCode);
     setParserResult(result);
-    
+
     toast.success("Created new file");
   };
 
   const proceedWithPendingOperation = () => {
     if (!pendingOperation) return;
-    
+
     if (pendingOperation.type === 'open' && pendingOperation.data) {
       const file = pendingOperation.data;
       setActiveCodeId(file.id);
@@ -530,7 +556,7 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
       if (monacoEditorRef.current) {
         monacoEditorRef.current.setValue(file.code);
       }
-      
+
       const result = parsePLCCode(file.code);
       setParserResult(result);
     } else if (pendingOperation.type === 'new') {
@@ -541,11 +567,11 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
       if (monacoEditorRef.current) {
         monacoEditorRef.current.setValue(defaultCode);
       }
-      
+
       const result = parsePLCCode(defaultCode);
       setParserResult(result);
     }
-    
+
     setUnsavedChanges(false);
     setPendingOperation(null);
   };
@@ -561,7 +587,7 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
   const handleExportXml = () => {
     const xml = generatePLCopenXML(parserResult);
     setXmlOutput(xml);
-    
+
     const blob = new Blob([xml], { type: "text/xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -571,56 +597,192 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     toast.success("XML exported successfully");
   };
 
-  const insertTemplate = (template: string) => {
-    if (monacoEditorRef.current) {
-      const currentPosition = monacoEditorRef.current.getPosition();
-      if (currentPosition) {
-        monacoEditorRef.current.executeEdits("", [
-          {
-            range: {
-              startLineNumber: currentPosition.lineNumber,
-              startColumn: currentPosition.column,
-              endLineNumber: currentPosition.lineNumber,
-              endColumn: currentPosition.column,
-            },
-            text: template,
-            forceMoveMarkers: true,
-          },
-        ]);
-        monacoEditorRef.current.focus();
-      }
-    }
-  };
+const insertTemplate = (template: string) => {
+  if (!monacoEditorRef.current) return;
 
-  const handleSave = async () => {
-    if (!user) return;
-    
-    setIsSaving(true);
-    const currentCode = monacoEditorRef.current?.getValue() || "";
-    
-    try {
-      if (activeCodeId) {
-        await updatePLCCode.mutateAsync({ id: activeCodeId, code: currentCode, title });
-      } else {
-        const saved = await savePLCCode.mutateAsync({ code: currentCode, title });
-        if (saved) {
-          setActiveCodeId(saved.id);
+  const editorInstance = monacoEditorRef.current;
+  const currentPosition = editorInstance.getPosition();
+  if (!currentPosition) return;
+
+  let targetLineNumber = currentPosition.lineNumber;
+  let targetColumn = currentPosition.column;
+  let insertText = template;
+
+  // --- Logic for Method Insertion ---
+  // Check if the template looks like a METHOD definition
+  if (template.trim().toUpperCase().startsWith('METHOD')) {
+    const model = editorInstance.getModel();
+    if (model) {
+      const fullCode = model.getValue();
+      const lines = fullCode.split('\n');
+
+      // Find the containing Function Block based on cursor position and parsed structure
+      let containingFb: PLCFunctionBlock | null = null;
+      let containingFbEndLine = -1; // Store the END_FUNCTION_BLOCK line number
+
+      for (const fb of parserResult.functionBlocks) {
+        // Find the END_FUNCTION_BLOCK line for this FB first
+        let fbEndLineIndex = -1;
+        for (let i = fb.lineNumber - 1; i < lines.length; i++) { // Start search from FB definition line
+          if (lines[i].trim().toUpperCase() === 'END_FUNCTION_BLOCK') {
+            fbEndLineIndex = i;
+            break;
+          }
+        }
+
+        if (fbEndLineIndex !== -1) {
+          const fbEndLine = fbEndLineIndex + 1; // 1-based line number
+          // Check if cursor is within this FB's definition range
+          if (currentPosition.lineNumber >= fb.lineNumber && currentPosition.lineNumber <= fbEndLine) {
+            containingFb = fb;
+            containingFbEndLine = fbEndLine;
+            break; // Found the FB containing the cursor
+          }
         }
       }
-      setLastSaved(new Date());
-      setUnsavedChanges(false);
-      toast.success("Saved successfully");
-    } catch (error) {
-      console.error("Save failed:", error);
-      toast.error("Failed to save");
-    } finally {
-      setIsSaving(false);
+
+
+      if (containingFb && containingFbEndLine !== -1) {
+        console.log("Cursor is inside FB:", containingFb.name, `(Lines ${containingFb.lineNumber}-${containingFbEndLine})`);
+
+        let lastMethodEndLineIndex = -1;
+        let searchIndex = containingFbEndLine; // Start searching *after* END_FUNCTION_BLOCK line (0-based index)
+
+        // Find the end line of the last method associated with this FB
+        // Heuristic: Search for METHOD...END_METHOD blocks between END_FUNCTION_BLOCK
+        // and the start of the next POU or Property definition.
+        while (searchIndex < lines.length) {
+            const lineTrimmedUpper = lines[searchIndex].trim().toUpperCase();
+
+            // Check if the line starts a METHOD definition
+            if (lineTrimmedUpper.startsWith('METHOD ')) {
+                // Found a method, now find its END_METHOD
+                let methodEndIndex = -1;
+                for (let j = searchIndex + 1; j < lines.length; j++) {
+                    const innerLineTrimmedUpper = lines[j].trim().toUpperCase();
+                    if (innerLineTrimmedUpper === 'END_METHOD') {
+                        methodEndIndex = j;
+                        break;
+                    }
+                    // Stop if we hit another POU/Property definition before END_METHOD
+                    if (innerLineTrimmedUpper.startsWith('FUNCTION_BLOCK') || innerLineTrimmedUpper.startsWith('PROGRAM') || innerLineTrimmedUpper.startsWith('FUNCTION') || innerLineTrimmedUpper.startsWith('PROPERTY')) {
+                        break;
+                    }
+                }
+
+                if (methodEndIndex !== -1) {
+                    // Check if this method belongs to the current FB (simple check: no other POU started between FB end and this method start)
+                    let belongsToFb = true;
+                    for (let k = containingFbEndLine; k < searchIndex; k++) {
+                         const intermediateLine = lines[k].trim().toUpperCase();
+                         if (intermediateLine.startsWith('FUNCTION_BLOCK') || intermediateLine.startsWith('PROGRAM') || intermediateLine.startsWith('FUNCTION') || intermediateLine.startsWith('PROPERTY')) {
+                             belongsToFb = false;
+                             break;
+                         }
+                    }
+
+                    if (belongsToFb) {
+                        lastMethodEndLineIndex = methodEndIndex;
+                        searchIndex = methodEndIndex + 1; // Continue search after this method
+                        console.log("Found METHOD belonging to", containingFb.name, "ending at index:", methodEndIndex);
+                    } else {
+                        console.log("Found METHOD at index", searchIndex, "but it seems to belong to a later POU. Stopping method search.");
+                        break; // Stop searching, method belongs to a later POU
+                    }
+                } else {
+                    // Malformed method? Stop searching for methods here.
+                    console.log("Could not find END_METHOD for METHOD at index:", searchIndex);
+                    break;
+                }
+            } else if (lineTrimmedUpper.startsWith('FUNCTION_BLOCK') || lineTrimmedUpper.startsWith('PROGRAM') || lineTrimmedUpper.startsWith('FUNCTION') || lineTrimmedUpper.startsWith('PROPERTY')) {
+                // Stop searching if we hit the next POU or Property definition
+                console.log("Stopping method search at next POU/Property:", lineTrimmedUpper);
+                break;
+            } else {
+                searchIndex++; // Move to the next line
+            }
+        }
+
+
+        if (lastMethodEndLineIndex !== -1) {
+          // Insert after the last method's END_METHOD
+          targetLineNumber = lastMethodEndLineIndex + 2; // +1 for 1-based index, +1 for line after
+          console.log("[DEBUG] Inserting after last method at line:", targetLineNumber);
+        } else {
+          // No methods found after END_FUNCTION_BLOCK, insert right after it
+          targetLineNumber = containingFbEndLine + 1; // Insert on the line immediately after END_FUNCTION_BLOCK
+          console.log("[DEBUG] No methods found for FB, inserting after END_FUNCTION_BLOCK at line:", targetLineNumber);
+        }
+        targetColumn = 1; // Methods always start at column 1
+        // Add newline before template to separate it
+        insertText = "\n" + template;
+      } else {
+         // Fallback for METHOD: Could not reliably determine target FB or its end. Insert at cursor line, column 1.
+         console.log("[DEBUG] Failed to determine target FB/End for METHOD. Inserting at cursor line:", currentPosition.lineNumber);
+         targetLineNumber = currentPosition.lineNumber;
+         targetColumn = 1; // Default to column 1 for block elements
+         // Add newline if not already on an empty line start
+         const currentLineContent = editorInstance.getModel()?.getLineContent(targetLineNumber) ?? "";
+         insertText = (targetColumn === 1 && currentLineContent.trim() === "" ? "" : "\n") + template;
+      }
+    } else {
+        // Model not available for METHOD, insert at cursor line, column 1
+        targetLineNumber = currentPosition.lineNumber;
+        targetColumn = 1; // Default to column 1
+        const currentLineContent = editorInstance.getModel()?.getLineContent(targetLineNumber) ?? "";
+        insertText = (targetColumn === 1 && currentLineContent.trim() === "" ? "" : "\n") + template;
     }
-  };
+  } else {
+      // --- Logic for Non-Method Templates (FB, Program, Function, Property, etc.) ---
+      console.log("[DEBUG] Inserting non-METHOD template.");
+      targetLineNumber = currentPosition.lineNumber;
+      targetColumn = 1; // Always insert block templates at column 1
+
+      // Add newline before template unless inserting at the start of an empty line
+      const currentLineContent = editorInstance.getModel()?.getLineContent(targetLineNumber) ?? "";
+      const isStartOfEmptyLine = currentPosition.column === 1 && currentLineContent.trim() === "";
+      insertText = (isStartOfEmptyLine ? "" : "\n") + template;
+      console.log(`[DEBUG] Non-METHOD insert at Line: ${targetLineNumber}, Col: ${targetColumn}. Prepending newline: ${!isStartOfEmptyLine}`);
+  }
+  // --- End of Logic for Method Insertion ---
+
+  // Use the calculated or original position/text
+  editorInstance.executeEdits("insertTemplate", [
+    {
+      range: {
+        startLineNumber: targetLineNumber,
+        startColumn: targetColumn,
+        endLineNumber: targetLineNumber,
+        endColumn: targetColumn,
+      },
+      text: insertText,
+      forceMoveMarkers: true,
+    },
+  ]);
+  editorInstance.focus();
+  // Ensure the inserted text is visible and position cursor at the start of the insertion
+  // Note: Calculating the precise end position after edits can be complex and error-prone.
+  // Placing it at the start of the inserted block is a safer default.
+  // Position cursor *after* the inserted block.
+  // Calculate the line number *after* the last line of the inserted text.
+  const insertedLineCount = insertText.split('\n').length;
+  const lineAfterInsertion = targetLineNumber + insertedLineCount - (insertText.endsWith('\n') ? 0 : 1); // Adjust if template ends with newline
+
+  // Place cursor at the beginning of the next line
+  const finalCursorLine = lineAfterInsertion + 1;
+  const finalCursorColumn = 1;
+
+  editorInstance.setPosition({ lineNumber: finalCursorLine, column: finalCursorColumn });
+  editorInstance.revealPositionInCenterIfOutsideViewport({
+      lineNumber: finalCursorLine,
+      column: finalCursorColumn
+  });
+  console.log(`[DEBUG] Cursor moved to Line: ${finalCursorLine}, Col: ${finalCursorColumn} after insertion.`);
+};
 
   const toggleAutoSave = () => {
     setIsAutoSaveEnabled(prev => !prev);
@@ -629,13 +791,13 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
 
   const formatLastSaved = () => {
     if (!lastSaved) return "Not saved yet";
-    
+
     const now = new Date();
     const diffMs = now.getTime() - lastSaved.getTime();
     const diffSecs = Math.floor(diffMs / 1000);
     const diffMins = Math.floor(diffSecs / 60);
     const diffHours = Math.floor(diffMins / 60);
-    
+
     if (diffSecs < 60) return `Saved ${diffSecs} second${diffSecs !== 1 ? 's' : ''} ago`;
     if (diffMins < 60) return `Saved ${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
     return `Saved ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
@@ -656,7 +818,7 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
         >
           <ShortcutsHelp />
         </EditorHeader>
-        
+
         <EditorToolbar
           onInsertTemplate={insertTemplate}
           activeFileId={activeCodeId}
@@ -664,6 +826,7 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
           onNewFile={handleNewFile}
           isMobileSidebarOpen={isMobileSidebarOpen} // Pass state down
           setIsMobileSidebarOpen={setIsMobileSidebarOpen} // Pass setter down
+          onExportXML={handleExportXml} // Pass the export handler
         />
 
         <div className="flex-grow flex overflow-hidden">
@@ -675,7 +838,7 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
               functions={parserResult.functions}
               selectedNode={selectedNode}
               setSelectedNode={setSelectedNode}
-              navigateToElement={navigateToElement}
+              onNavigate={navigateToElement} // Pass navigation function as onNavigate
             />
           </div>
 
@@ -692,7 +855,7 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
                    functions={parserResult.functions}
                    selectedNode={selectedNode}
                    setSelectedNode={setSelectedNode}
-                   navigateToElement={(lineNumber) => {
+                   onNavigate={(lineNumber) => { // Pass navigation function as onNavigate
                      navigateToElement(lineNumber);
                      setIsMobileSidebarOpen(false); // Close sheet on navigation
                    }}
@@ -703,26 +866,26 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
 
           <div className="flex-grow flex flex-col">
             <div id="editor" className="flex-grow" ref={editorRef}></div>
-            
+
             {parserResult.errors.length > 0 && (
               <div className="border-t p-2 bg-red-50 dark:bg-red-900/20">
                 <div className="flex justify-between items-center">
                   <h3 className="font-medium text-red-600 dark:text-red-400">
                     {parserResult.errors.length} Error{parserResult.errors.length !== 1 ? 's' : ''}
                   </h3>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="sm"
                     onClick={() => setErrorListVisible(!errorListVisible)}
                   >
                     {errorListVisible ? 'Hide' : 'Show'} Details
                   </Button>
                 </div>
-                
+
                 {errorListVisible && (
                   <ul className="mt-2 text-sm space-y-1 max-h-32 overflow-y-auto">
                     {parserResult.errors.map((error, index) => (
-                      <li 
+                      <li
                         key={index}
                         className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 cursor-pointer rounded"
                         onClick={() => navigateToElement(error.lineNumber)}
@@ -737,9 +900,9 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
           </div>
         </div>
       </div>
-      
+
       <EditorTour />
-      
+
       <AlertDialog open={!!pendingOperation} onOpenChange={(open) => !open && setPendingOperation(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

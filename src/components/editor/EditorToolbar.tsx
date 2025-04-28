@@ -16,6 +16,7 @@ interface EditorToolbarProps {
   onNewFile?: () => void;
   isMobileSidebarOpen?: boolean; // Add prop for state
   setIsMobileSidebarOpen?: (open: boolean) => void; // Add prop for setter
+  onExportXML: () => void; // Add prop for XML export trigger
 }
 
 export const EditorToolbar = ({ 
@@ -25,6 +26,7 @@ export const EditorToolbar = ({
   onNewFile,
   isMobileSidebarOpen, // Destructure new props
   setIsMobileSidebarOpen, // Destructure new props
+  onExportXML, // Destructure new prop
 }: EditorToolbarProps) => {
   // Reinstate the hook call to get mutations and their states
   const { plcCodes, isLoading, deletePLCCode, duplicatePLCCode } = usePLCCode();
@@ -74,7 +76,7 @@ END_PROPERTY`;
     deletePLCCode.mutate(id);
   };
 
-  const handleDuplicateFile = (id: string, title: string) => {
+  const handleDuplicateFile = ({ id, title }: { id: string; title: string }) => {
     duplicatePLCCode.mutate({ id, title });
   };
 
@@ -136,6 +138,21 @@ END_PROPERTY`;
           </TooltipTrigger>
           <TooltipContent>
             <p>Insert a new Property template</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onExportXML} // Call the passed-in handler
+            >
+              Export XML
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Export the current PLC code to XML format</p>
           </TooltipContent>
         </Tooltip>
       </div>

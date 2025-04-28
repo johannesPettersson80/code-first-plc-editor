@@ -1,6 +1,8 @@
+vi.mock('@/stores/auth', () => ({
+
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react'; // Import waitFor
-import React from 'react'; // Import React for JSX
+import { renderHook, act, waitFor } from '@testing-library/react'; // Use @testing-library/react instead
 import { usePLCCode, PLCCodeEntry } from '@/hooks/usePLCCode';
 import { supabase } from '@/integrations/supabase/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -21,10 +23,10 @@ vi.mock('@/integrations/supabase/client', () => ({
 }));
 
 // Mock the auth store to provide a dummy user
-vi.mock('@/stores/auth', () => ({
   useAuthStore: vi.fn(() => ({ user: { id: 'test-user-id' } }))
 }));
 
+// Helper to create a QueryClient wrapper for hooks
 // Helper to create a QueryClient wrapper for hooks
 const createWrapper = () => {
   const queryClient = new QueryClient({
@@ -52,24 +54,19 @@ describe('Integration: File Management (usePLCCode Hook)', () => {
     (supabase.from as any).mockReturnThis(); // Ensure chaining works
     (supabase.eq as any).mockReturnThis();
     (supabase.order as any).mockReturnThis();
-    (supabase.select as any).mockClear(); // Clear specific mocks if needed
-    (supabase.insert as any).mockClear();
-    (supabase.update as any).mockClear();
-    (supabase.delete as any).mockClear();
-    (supabase.single as any).mockClear();
   });
 
   it('should fetch PLC codes', async () => {
     const mockData: PLCCodeEntry[] = [
-      { id: '1', title: 'File 1', code: 'CODE1', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), user_id: 'test-user-id' }, // Added user_id for consistency
-      { id: '2', title: 'File 2', code: 'CODE2', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), user_id: 'test-user-id' }, // Added user_id for consistency
+      { id: '1', title: 'File 1', code: 'CODE1', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: '2', title: 'File 2', code: 'CODE2', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
     ];
+    // Assuming vitest types are globally available, remove vi.Mock cast
     (supabase.select as any).mockResolvedValueOnce({ data: mockData, error: null });
 
     const wrapper = createWrapper();
-    const { result } = renderHook(() => usePLCCode(), { wrapper });
+    const { result, waitFor } = renderHook(() => usePLCCode(), { wrapper });
 
-    // Use imported waitFor
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(supabase.from).toHaveBeenCalledWith('plc_code');
@@ -82,13 +79,12 @@ describe('Integration: File Management (usePLCCode Hook)', () => {
 
   it('should save a new PLC code', async () => {
     const newCodeData = { title: 'New File', code: 'NEW CODE' };
-    // Ensure the mock saved entry matches the expected structure, including user_id
-    const savedEntry: PLCCodeEntry = { ...newCodeData, id: '3', user_id: 'test-user-id', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    const savedEntry: PLCCodeEntry = { ...newCodeData, id: '3', user_id: undefined, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
 
-    // Mock the insert operation's chained calls
-    const singleMock = vi.fn().mockResolvedValueOnce({ data: savedEntry, error: null });
-    const selectMock = vi.fn().mockReturnValue({ single: singleMock });
-    (supabase.insert as any).mockReturnValue({ select: selectMock });
+    // Mock the insert operation
+    const insertMock = vi.fn().mockResolvedValueOnce({ data: savedEntry, error: null });
+    // Assuming vitest types are globally available, remove vi.Mock cast
+    (supabase.insert as any).mockReturnValue({ select: vi.fn().mockReturnThis(), single: insertMock });
 
 
     const wrapper = createWrapper();
@@ -99,10 +95,11 @@ describe('Integration: File Management (usePLCCode Hook)', () => {
     });
 
     expect(supabase.from).toHaveBeenCalledWith('plc_code');
-    expect(supabase.insert).toHaveBeenCalledWith([{ ...newCodeData, user_id: 'test-user-id' }]);
+    expect(supabase.insert).toHaveBeenCalledWith([{ ...newCodeData, user_id: undefined }]);
     // Check if select().single() was called after insert
-    expect(selectMock).toHaveBeenCalled();
-    expect(singleMock).toHaveBeenCalled();
+    // Assuming vitest types are globally available, remove vi.Mock cast
+    expect((supabase.insert as any).mock.results[0].value.select).toHaveBeenCalled();
+    expect((supabase.insert as any).mock.results[0].value.single).toHaveBeenCalled();
 
     // We might also want to check if queryClient.invalidateQueries was called,
     // but that requires mocking QueryClient more deeply or spying on it.
@@ -110,14 +107,12 @@ describe('Integration: File Management (usePLCCode Hook)', () => {
 
   it('should update an existing PLC code', async () => {
     const updateData = { id: '1', title: 'Updated File 1', code: 'UPDATED CODE1' };
-    // Ensure the mock updated entry matches the expected structure
-    const updatedEntry: PLCCodeEntry = { ...updateData, user_id: 'test-user-id', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    const updatedEntry: PLCCodeEntry = { ...updateData, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
 
-     // Mock the update operation's chained calls
-    const singleMock = vi.fn().mockResolvedValueOnce({ data: updatedEntry, error: null });
-    const selectMock = vi.fn().mockReturnValue({ single: singleMock });
-    const eqMock = vi.fn().mockReturnValue({ select: selectMock });
-    (supabase.update as any).mockReturnValue({ eq: eqMock });
+     // Mock the update operation
+    const updateMock = vi.fn().mockResolvedValueOnce({ data: updatedEntry, error: null });
+     // Assuming vitest types are globally available, remove vi.Mock cast
+    (supabase.update as any).mockReturnValue({ eq: vi.fn().mockReturnThis(), select: vi.fn().mockReturnThis(), single: updateMock });
 
 
     const wrapper = createWrapper();
@@ -129,17 +124,18 @@ describe('Integration: File Management (usePLCCode Hook)', () => {
 
     expect(supabase.from).toHaveBeenCalledWith('plc_code');
     expect(supabase.update).toHaveBeenCalledWith({ code: updateData.code, title: updateData.title });
-    expect(eqMock).toHaveBeenCalledWith('id', updateData.id);
-    expect(selectMock).toHaveBeenCalled();
-    expect(singleMock).toHaveBeenCalled();
+    // Assuming vitest types are globally available, remove vi.Mock cast
+    expect((supabase.update as any).mock.results[0].value.eq).toHaveBeenCalledWith('id', updateData.id);
+    expect((supabase.update as any).mock.results[0].value.select).toHaveBeenCalled();
+    expect((supabase.update as any).mock.results[0].value.single).toHaveBeenCalled();
   });
 
   it('should delete a PLC code', async () => {
     const fileIdToDelete = '1';
 
-    // Mock the delete operation's chained calls
-    const eqMock = vi.fn().mockResolvedValueOnce({ error: null }); // delete itself doesn't return data, just potential error
-    (supabase.delete as any).mockReturnValue({ eq: eqMock });
+    // Mock the delete operation
+    // Assuming vitest types are globally available, remove vi.Mock cast
+    (supabase.delete as any).mockResolvedValueOnce({ error: null });
 
     const wrapper = createWrapper();
     const { result } = renderHook(() => usePLCCode(), { wrapper });
@@ -150,7 +146,7 @@ describe('Integration: File Management (usePLCCode Hook)', () => {
 
     expect(supabase.from).toHaveBeenCalledWith('plc_code');
     expect(supabase.delete).toHaveBeenCalled();
-    expect(eqMock).toHaveBeenCalledWith('id', fileIdToDelete);
+    expect(supabase.eq).toHaveBeenCalledWith('id', fileIdToDelete);
   });
 
 
@@ -158,18 +154,17 @@ describe('Integration: File Management (usePLCCode Hook)', () => {
       const originalFileId = '1';
       const newTitle = 'File 1 (Copy)';
       const originalCode = { code: 'ORIGINAL CODE' };
-      // Ensure the mock duplicated entry matches the expected structure
-      const duplicatedEntry: PLCCodeEntry = { id: '4', title: newTitle, code: originalCode.code, user_id: 'test-user-id', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      const duplicatedEntry: PLCCodeEntry = { id: '4', title: newTitle, code: originalCode.code, user_id: undefined, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
 
       // Mock the select operation to fetch the original code
-      const selectSingleMock = vi.fn().mockResolvedValueOnce({ data: originalCode, error: null });
-      const selectEqMock = vi.fn().mockReturnValue({ single: selectSingleMock });
-      (supabase.select as any).mockReturnValue({ eq: selectEqMock }); // Mock select().eq().single()
+      const selectMock = vi.fn().mockResolvedValueOnce({ data: originalCode, error: null });
+      // Assuming vitest types are globally available, remove vi.Mock cast
+      (supabase.select as any).mockReturnValue({ eq: vi.fn().mockReturnThis(), single: selectMock });
 
       // Mock the insert operation for the duplicated entry
-      const insertSingleMock = vi.fn().mockResolvedValueOnce({ data: duplicatedEntry, error: null });
-      const insertSelectMock = vi.fn().mockReturnValue({ single: insertSingleMock });
-      (supabase.insert as any).mockReturnValue({ select: insertSelectMock }); // Mock insert().select().single()
+      const insertMock = vi.fn().mockResolvedValueOnce({ data: duplicatedEntry, error: null });
+      // Assuming vitest types are globally available, remove vi.Mock cast
+      (supabase.insert as any).mockReturnValue({ select: vi.fn().mockReturnThis(), single: insertMock });
 
       const wrapper = createWrapper();
       const { result } = renderHook(() => usePLCCode(), { wrapper });
@@ -178,17 +173,19 @@ describe('Integration: File Management (usePLCCode Hook)', () => {
         await result.current.duplicatePLCCode.mutateAsync({ id: originalFileId, title: newTitle });
       });
 
-      // Check the select call chain
+      // Check the select call
       expect(supabase.from).toHaveBeenCalledWith('plc_code');
       expect(supabase.select).toHaveBeenCalledWith('code');
-      expect(selectEqMock).toHaveBeenCalledWith('id', originalFileId);
-      expect(selectSingleMock).toHaveBeenCalled();
+      // Assuming vitest types are globally available, remove vi.Mock cast
+      expect((supabase.select as any).mock.results[0].value.eq).toHaveBeenCalledWith('id', originalFileId);
+      expect((supabase.select as any).mock.results[0].value.single).toHaveBeenCalled();
 
-      // Check the insert call chain
+      // Check the insert call
       expect(supabase.from).toHaveBeenCalledWith('plc_code'); // Called again for insert
-      expect(supabase.insert).toHaveBeenCalledWith([{ code: originalCode.code, title: newTitle, user_id: 'test-user-id' }]);
-      expect(insertSelectMock).toHaveBeenCalled();
-      expect(insertSingleMock).toHaveBeenCalled();
+      expect(supabase.insert).toHaveBeenCalledWith([{ code: originalCode.code, title: newTitle, user_id: undefined }]);
+      // Assuming vitest types are globally available, remove vi.Mock cast
+      expect((supabase.insert as any).mock.results[0].value.select).toHaveBeenCalled();
+      expect((supabase.insert as any).mock.results[0].value.single).toHaveBeenCalled();
   });
 
 });

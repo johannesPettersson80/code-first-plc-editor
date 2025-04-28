@@ -79,7 +79,8 @@ describe('parsePLCCode', () => {
       name: 'myVar',
       type: 'BOOL',
       scope: 'VAR',
-      comment: undefined, // Explicitly check for undefined comment
+      lineNumber: 4, // Add the expected line number
+      // Omit comment property as the parser doesn't add it when undefined
     });
     expect(result.functionBlocks[0].methods).toEqual([]);
     expect(result.functionBlocks[0].properties).toEqual([]);
