@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -13,7 +12,7 @@ import {
   Copy,
   Clock,
   CheckCircle2,
-  XCircle2,
+  XCircle,
   Search,
   SortAsc,
   Calendar
@@ -43,7 +42,6 @@ export const FileManager = ({
   const [sortBy, setSortBy] = useState<'updated' | 'title'>('updated');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
-  // Filter and sort files
   const filteredAndSortedFiles = [...files]
     .filter(file => 
       file.title.toLowerCase().includes(searchTerm.toLowerCase())
@@ -60,14 +58,12 @@ export const FileManager = ({
       }
     });
   
-  // Format date for display
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString() + ' ' + 
            date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
   
-  // Toggle sort direction
   const toggleSort = (field: 'updated' | 'title') => {
     if (sortBy === field) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
