@@ -1,7 +1,8 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { Book, BookOpen, FileCode, FileText, ChevronDown, ChevronUp, LogOut, Moon, Sun } from "lucide-react";
+import { FileCode, Book, LogOut, Moon, Sun } from "lucide-react";
 import { useAuthStore } from "@/stores/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
@@ -11,7 +12,6 @@ import {
   SidebarContent,
   SidebarHeader,
   SidebarFooter,
-  SidebarTrigger,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -105,13 +105,21 @@ const PLCEditorLayout = () => {
                 <SidebarGroupLabel>Navigation</SidebarGroupLabel>
                 <SidebarMenu>
                   <SidebarMenuItem>
-                    <SidebarMenuButton tooltip="Code Editor">
+                    <SidebarMenuButton 
+                      tooltip="Code Editor" 
+                      isActive={window.location.pathname === '/'}
+                      onClick={() => navigate('/')}
+                    >
                       <FileCode className="w-4 h-4" />
                       <span>Editor</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
-                    <SidebarMenuButton tooltip="Documentation">
+                    <SidebarMenuButton 
+                      tooltip="Documentation"
+                      isActive={window.location.pathname === '/documentation'}
+                      onClick={() => navigate('/documentation')}
+                    >
                       <Book className="w-4 h-4" />
                       <span>Documentation</span>
                     </SidebarMenuButton>

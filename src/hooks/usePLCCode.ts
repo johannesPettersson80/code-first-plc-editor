@@ -70,11 +70,62 @@ export const usePLCCode = () => {
       toast.error('Failed to update code: ' + error.message);
     }
   });
+  
+  const deletePLCCode = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('plc_code')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plc-codes'] });
+      toast.success('Code deleted successfully');
+    },
+    onError: (error) => {
+      toast.error('Failed to delete code: ' + error.message);
+    }
+  });
+  
+  const duplicatePLCCode = useMutation({
+    mutationFn: async ({ id, title }: { id: string; title: string }) => {
+      // First, get the code to duplicate
+      const { data: originalCode, error: fetchError } = await supabase
+        .from('plc_code')
+        .select('code')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+      
+      // Then create a new entry with the same code
+      const { data, error } = await supabase
+        .from('plc_code')
+        .insert([{ code: originalCode.code, title, user_id: user?.id }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plc-codes'] });
+      toast.success('Code duplicated successfully');
+    },
+    onError: (error) => {
+      toast.error('Failed to duplicate code: ' + error.message);
+    }
+  });
 
   return {
     plcCodes,
     isLoading,
     savePLCCode,
-    updatePLCCode
+    updatePLCCode,
+    deletePLCCode,
+    duplicatePLCCode
   };
 };
