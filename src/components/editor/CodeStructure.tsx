@@ -20,7 +20,8 @@ export const CodeStructure = ({
   const [isProjectExpanded, setIsProjectExpanded] = useState(true);
 
   const highlightVariable = (variable: { name: string }) => {
-    if (!window.monaco) return;
+    // Check if monaco is available in the window object
+    if (typeof window.monaco === "undefined") return;
     
     const editor = window.monaco.editor.getEditors()[0];
     if (!editor) return;
