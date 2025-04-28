@@ -29,12 +29,21 @@ export const CodeStructure = ({
     const model = editor.getModel();
     if (!model) return;
 
+    // Clear previous decorations
+    const oldDecorations = model.getAllDecorations() || [];
+    editor.deltaDecorations(
+      oldDecorations.map(d => d.id),
+      []
+    );
+
+    // Find and highlight all occurrences of the variable
     const matches = model.findMatches(variable.name, false, false, true, null, false);
     if (matches.length > 0) {
+      // First move to the first occurrence
       editor.setSelection(matches[0].range);
       editor.revealLineInCenter(matches[0].range.startLineNumber);
       
-      // Add decoration to highlight all instances
+      // Then highlight all occurrences with a decoration
       const decorations = matches.map(match => ({
         range: match.range,
         options: {
@@ -42,12 +51,7 @@ export const CodeStructure = ({
         }
       }));
       
-      // Clear previous decorations
-      const oldDecorations = editor.getModel()?.getAllDecorations() || [];
-      editor.deltaDecorations(
-        oldDecorations.map(d => d.id),
-        decorations
-      );
+      editor.deltaDecorations([], decorations);
     }
   };
 
