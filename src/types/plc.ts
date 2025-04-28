@@ -7,6 +7,7 @@ export interface PLCVariable {
   initialValue?: string;
   scope: 'VAR' | 'VAR_INPUT' | 'VAR_OUTPUT' | 'VAR_IN_OUT' | 'VAR_TEMP';
   comment?: string;
+  lineNumber: number; // Add line number for declaration
 }
 
 export interface PLCMethod {
@@ -17,6 +18,7 @@ export interface PLCMethod {
   implementation: string; // Keep raw implementation for now
   statements?: PLCStatement[]; // Add parsed statements
   lineNumber: number;
+  columnStart?: number; // Add column start for error reporting
 }
 
 // --- Statement Types ---
@@ -50,6 +52,7 @@ export interface PLCProperty {
   implementation: string; // Keep raw implementation for now
   statements?: PLCStatement[]; // Add parsed statements
   lineNumber: number;
+  columnStart?: number; // Add column start for error reporting
 }
 
 export interface PLCFunctionBlock {
@@ -57,15 +60,17 @@ export interface PLCFunctionBlock {
   variables: PLCVariable[];
   methods: PLCMethod[];
   properties: PLCProperty[];
-  // statements?: PLCStatement[]; // Future: FB body statements
+  statements?: PLCStatement[]; // FB body statements
   lineNumber: number;
+  columnStart?: number; // Add column start for error reporting
 }
 
 export interface PLCProgram {
   name: string;
   variables: PLCVariable[];
-  // statements?: PLCStatement[]; // Future: Program body statements
+  statements?: PLCStatement[]; // Program body statements
   lineNumber: number;
+  columnStart?: number; // Add column start for error reporting
 }
 
 export interface PLCFunction {
@@ -73,8 +78,9 @@ export interface PLCFunction {
   returnType: string;
   parameters: PLCVariable[]; // Function parameters are like VAR_INPUT
   localVariables: PLCVariable[]; // VAR_TEMP within function
-  // statements?: PLCStatement[]; // Future: Function body statements
+  statements?: PLCStatement[]; // Function body statements
   lineNumber: number;
+  columnStart?: number; // Add column start for error reporting
 }
 
 

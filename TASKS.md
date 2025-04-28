@@ -15,35 +15,36 @@ This document outlines the development tasks for the PLC Code-First Editor proje
 *   [x] Enhance parsing of other statement types (Basic IF statement parsing implemented).
 *   [x] Implement parsing for `PROGRAM` and `FUNCTION` POU types.
 *   [x] Correctly parse method parameters.
-*   [ ] Add more robust error reporting with specific locations (line and column).
+*   [~] Add more robust error reporting with specific locations (line and column) - Added column info for nested POU errors.
 
 ### PLCopen XML Export
 
 *   [x] Improve representation of parsed statements (especially assignments) within the `<ST>` body in a more compliant way (Implemented CDATA wrapping for assignments and basic IF structure).
 *   [x] Add support for exporting `PROGRAM` and `FUNCTION` POUs.
-*   [ ] Explore options for representing other parsed ST constructs in XML.
+*   [x] Explore options for representing other parsed ST constructs in XML (Implemented recursive ST string generation).
 
 ### User Interface (UI) / User Experience (UX)
 
 *   [x] Update `CodeStructure` component to display parsed statements.
 *   [x] Implement basic auto-completion in the Monaco editor.
-*   [ ] Add "Go to Definition" functionality.
-*   [ ] Provide hover information for variables and functions.
-*   [ ] Refine the file management interface (loading, saving, deleting).
-*   [ ] Improve layout responsiveness for smaller screens.
+*   [x] Add "Go to Definition" functionality (POU jump implemented; Variable jump implemented; Method/Property jumps still basic).
+*   [x] Provide hover information for variables and functions.
+*   [x] Refine the file management interface (loading, saving, deleting) - Implemented delete confirmation, sort indicators, toast notifications (via hook), and button loading states.
+*   [x] Improve layout responsiveness for smaller screens (Implemented collapsible sidebar using Sheet).
 
 ### Backend / Persistence
 
 *   [ ] Review and refine Supabase database schema and RLS policies.
-*   [ ] Implement functionality to delete saved code snippets.
+*   [x] Implement functionality to delete saved code snippets.
 
 ### Testing
 
-*   [ ] Introduce unit tests for the `plcParser.ts` functions.
-*   [ ] Add integration tests for core features (saving, loading, export).
+*   [x] Introduce unit tests for the `plcParser.ts` functions.
+*   [~] Add integration tests for core features (saving, loading, export) - Added tests for file management hook (usePLCCode) with Supabase mocking.
 
 ### Documentation
 
+*   [x] Update `CodeStructure` component to display Programs and Functions.
 *   [ ] Keep documentation in the `docs/` directory updated with new features and changes.
 
 ## Completed Tasks

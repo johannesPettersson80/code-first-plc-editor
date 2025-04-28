@@ -33,9 +33,10 @@ export function parsePLCCode(code: string): ParserResult {
   const methodRegex = /METHOD\s+([A-Za-z][A-Za-z0-9_]*)\s*(?:\(\s*(.*)\s*\))?\s*:\s*([A-Za-z][A-Za-z0-9_]*)/;
   const propertyRegex = /PROPERTY\s+([A-Za-z][A-Za-z0-9_]*)\s*:\s*([A-Za-z][A-Za-z0-9_]*)/;
   const getSetRegex = /(GET|SET)/;
-  const varSectionRegex = /(VAR|VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_TEMP)/;
+  const varSectionRegex = /^\s*(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_TEMP|VAR)/; // Match from start, prioritize longer keywords
   const endVarRegex = /END_VAR/;
-  const varDeclarationRegex = /\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*([A-Za-z][A-Za-z0-9_]*)\s*(?::=\s*(.+?))?\s*;(?:\s*\/\/\s*(.*))?/;
+  // Updated regex to capture name(1), type(2), optional initial value(3), and optional comment (everything after semicolon)(4)
+  const varDeclarationRegex = /\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*([A-Za-z][A-Za-z0-9_]*)\s*(?::=\s*(.+?))?\s*;(?:\s*(.*))?/;
   const endFunctionBlockRegex = /END_FUNCTION_BLOCK/;
   const endProgramRegex = /END_PROGRAM/; // END_PROGRAM
   const endFunctionRegex = /END_FUNCTION/; // END_FUNCTION
@@ -47,44 +48,174 @@ export function parsePLCCode(code: string): ParserResult {
   const elsifRegex = /^\s*ELSIF\s+(.+)\s+THEN/i; // ELSIF THEN
   const elseRegex = /^\s*ELSE/i; // ELSE
   const endifRegex = /^\s*END_IF/i; // END_IF
+  // Removed blockCommentOnlyRegex as we'll use startsWith/endsWith
 
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i]; // Use let to modify line
+    const originalLine = lines[i]; // Keep original line for potential comment extraction
+    let line = originalLine; // Use let for modifications
     const lineNumber = i + 1;
 
     try {
-      // Handle block comments - remove them before parsing the line
-      if (inBlockComment) {
-        if (line.includes('*)')) {
-          inBlockComment = false;
-          line = line.substring(line.indexOf('*)') + 2); // Remove comment end and everything before it
-        } else {
-          continue; // Skip processing lines fully within a block comment
+      // --- Comment Handling ---
+      // We need comments for variable declarations, so we don't strip them globally here anymore.
+      // Instead, regexes that need to ignore comments will handle them,
+      // and the variable regex will specifically capture them.
+      // We still need to handle multi-line block comments correctly.
+
+      let lineWithoutBlockComments = '';
+      let currentPos = 0;
+      if (inBlockComment) { // If we were already inside a block comment from the previous line
+          const endCommentIndex = line.indexOf('*)');
+          if (endCommentIndex !== -1) {
+              inBlockComment = false;
+              currentPos = endCommentIndex + 2; // Start processing after the comment ends
+          } else {
+              continue; // Whole line is inside a block comment, skip it
+          }
+      }
+
+      while (currentPos < line.length) {
+          const startCommentIndex = line.indexOf('(*', currentPos);
+          if (startCommentIndex !== -1) {
+              // Add text before the comment start
+              lineWithoutBlockComments += line.substring(currentPos, startCommentIndex);
+              const endCommentIndex = line.indexOf('*)', startCommentIndex + 2);
+              if (endCommentIndex !== -1) {
+                  // Block comment ends on the same line
+                  currentPos = endCommentIndex + 2; // Move past the comment
+              } else {
+                  // Block comment continues to the next line
+                  inBlockComment = true;
+                  currentPos = line.length; // Stop processing this line
+              }
+          } else {
+              // No more block comments found on this line
+              lineWithoutBlockComments += line.substring(currentPos);
+              currentPos = line.length; // Exit loop
+          }
+      }
+
+      // Now remove single-line comments from the block-comment-free version
+      const singleCommentIndex = lineWithoutBlockComments.indexOf('//');
+      let processedLine = (singleCommentIndex !== -1)
+          ? lineWithoutBlockComments.substring(0, singleCommentIndex)
+          : lineWithoutBlockComments;
+
+      processedLine = processedLine.trim(); // Trim whitespace after removing comments
+      if (processedLine === '' && !inBlockComment) continue; // Skip lines that are now empty unless we entered a block comment
+
+      // Use processedLine for most matching, but originalLine for var declarations
+      line = processedLine; // Default to using the processed line
+
+      // --- End Comment Handling ---
+
+      // --- Check for END keywords FIRST ---
+      const endMethodMatch = line.match(endMethodRegex);
+      const endPropertyMatch = line.match(/END_PROPERTY/);
+      const endFunctionBlockMatch = line.match(endFunctionBlockRegex);
+      const endProgramMatch = line.match(endProgramRegex);
+      const endFunctionMatch = line.match(endFunctionRegex);
+      const endVarMatch = line.match(endVarRegex);
+
+      if (endVarMatch && currentVarSection) { // Only end VAR if we are in one
+          currentVarSection = null;
+          continue;
+      }
+      if (endMethodMatch && currentMethod) {
+        // Logic for ending method (handling implementation buffer, resetting state)
+        if (!inImplementation && currentMethod) {
+           currentMethod.implementation = implementationBuffer;
+           implementationBuffer = '';
+           currentMethod = null;
+        } else if (inImplementation && bracketDepth === 0 && !currentIfStatement) {
+             currentMethod.implementation = implementationBuffer;
+             implementationBuffer = '';
+             currentMethod = null;
+             inImplementation = false;
         }
+        continue;
       }
+      if (endPropertyMatch && currentProperty) {
+           // Logic for ending property
+           if (!inImplementation && currentProperty) {
+               currentProperty.implementation += implementationBuffer;
+               implementationBuffer = '';
+               currentProperty = null;
+           } else if (inImplementation && bracketDepth === 0 && !currentIfStatement) {
+                currentProperty.implementation += implementationBuffer;
+                implementationBuffer = '';
+                currentProperty = null;
+                inImplementation = false;
+           }
+           continue;
+       }
+       if (endFunctionBlockMatch && currentFunctionBlock) {
+           // Logic for ending function block
+           const fbLineNumber = currentFunctionBlock.lineNumber; // Store line number before resetting
+           currentFunctionBlock = null;
+           currentMethod = null;
+           currentProperty = null;
+           currentVarSection = null;
+           implementationBuffer = '';
+           inImplementation = false;
+           bracketDepth = 0;
+           if (ifStatementStack.length > 0) {
+                const unclosedIf = ifStatementStack[0];
+                result.errors.push({
+                    message: 'Unclosed IF statement(s) at end of Function Block',
+                    lineNumber: unclosedIf.lineNumber, // Report error at the IF line
+                    columnStart: 1
+                });
+                ifStatementStack = [];
+                currentIfStatement = null;
+                currentIfBlockType = null;
+           }
+           continue;
+       }
+       if (endProgramMatch && currentProgram) {
+           // Logic for ending program
+           const progLineNumber = currentProgram.lineNumber;
+           currentProgram = null;
+           currentVarSection = null;
+           implementationBuffer = '';
+           inImplementation = false;
+           bracketDepth = 0;
+            if (ifStatementStack.length > 0) {
+                 const unclosedIf = ifStatementStack[0];
+                 result.errors.push({
+                     message: 'Unclosed IF statement(s) at end of Program',
+                     lineNumber: unclosedIf.lineNumber,
+                     columnStart: 1
+                 });
+                 ifStatementStack = [];
+                 currentIfStatement = null;
+                 currentIfBlockType = null;
+            }
+           continue;
+       }
+       if (endFunctionMatch && currentFunction) {
+           // Logic for ending function
+           const funcLineNumber = currentFunction.lineNumber;
+           currentFunction = null;
+           currentVarSection = null;
+           implementationBuffer = '';
+           inImplementation = false;
+           bracketDepth = 0;
+            if (ifStatementStack.length > 0) {
+                 const unclosedIf = ifStatementStack[0];
+                 result.errors.push({
+                     message: 'Unclosed IF statement(s) at end of Function',
+                     lineNumber: unclosedIf.lineNumber,
+                     columnStart: 1
+                 });
+                 ifStatementStack = [];
+                 currentIfStatement = null;
+                 currentIfBlockType = null;
+            }
+           continue;
+       }
+      // --- End of END keyword checks ---
 
-      while (line.includes('(*')) {
-        const startIndex = line.indexOf('(*');
-        const endIndex = line.indexOf('*)', startIndex);
-        if (endIndex !== -1) {
-          // Single-line or multi-line block comment start and end on the same line
-          line = line.substring(0, startIndex) + line.substring(endIndex + 2);
-        } else {
-          // Multi-line block comment starts on this line but doesn't end
-          line = line.substring(0, startIndex); // Remove from start of comment to end of line
-          inBlockComment = true;
-          break; // Stop processing this line for other patterns
-        }
-      }
-
-      // Remove single-line comments after block comment handling
-      const singleCommentIndex = line.indexOf('//');
-      if (singleCommentIndex !== -1) {
-        line = line.substring(0, singleCommentIndex);
-      }
-
-      line = line.trim(); // Trim whitespace after removing comments
-      if (line === '') continue; // Skip empty lines
 
       // Check for POU declarations (Function Block, Program, Function)
       const fbMatch = line.match(fbRegex);
@@ -95,7 +226,8 @@ export function parsePLCCode(code: string): ParserResult {
         if (currentFunctionBlock || currentProgram || currentFunction) {
           result.errors.push({
             message: 'Nested POU declaration (Function Block)',
-            lineNumber
+            lineNumber,
+            columnStart: originalLine.search(fbRegex) + 1 // Use originalLine for accurate column
           });
           continue;
         }
@@ -105,7 +237,7 @@ export function parsePLCCode(code: string): ParserResult {
           variables: [],
           methods: [],
           properties: [],
-          // statements: [], // FB body statements not parsed yet
+          statements: [], // Initialize FB body statements array
           lineNumber
         };
 
@@ -115,7 +247,8 @@ export function parsePLCCode(code: string): ParserResult {
         if (currentFunctionBlock || currentProgram || currentFunction) {
           result.errors.push({
             message: 'Nested POU declaration (Program)',
-            lineNumber
+            lineNumber,
+            columnStart: originalLine.search(programRegex) + 1 // Use originalLine for accurate column
           });
           continue;
         }
@@ -123,7 +256,7 @@ export function parsePLCCode(code: string): ParserResult {
         currentProgram = {
           name: programMatch[1],
           variables: [],
-          // statements: [], // Program body statements not parsed yet
+          statements: [], // Initialize program body statements
           lineNumber
         };
 
@@ -133,7 +266,8 @@ export function parsePLCCode(code: string): ParserResult {
         if (currentFunctionBlock || currentProgram || currentFunction) {
           result.errors.push({
             message: 'Nested POU declaration (Function)',
-            lineNumber
+            lineNumber,
+            columnStart: originalLine.search(functionRegex) + 1 // Use originalLine for accurate column
           });
           continue;
         }
@@ -147,7 +281,7 @@ export function parsePLCCode(code: string): ParserResult {
           returnType,
           parameters: parseParameters(paramString), // Function parameters are like VAR_INPUT
           localVariables: [], // VAR_TEMP within function
-          // statements: [], // Function body statements not parsed yet
+          statements: [], // Initialize function body statements
           lineNumber
         };
 
@@ -210,34 +344,60 @@ export function parsePLCCode(code: string): ParserResult {
       // Check for variable sections
       const varSectionMatch = line.match(varSectionRegex);
       if (varSectionMatch && (currentFunctionBlock || currentProgram || currentFunction)) {
-        currentVarSection = varSectionMatch[1] as PLCVariable['scope'];
+        currentVarSection = varSectionMatch[1] as PLCVariable['scope']; // Update state
         continue;
       }
 
-      // Check for end of variable section
-      if (line.match(endVarRegex)) {
-        currentVarSection = null;
-        continue;
-      }
-
-      // Parse variable declarations
+      // Parse variable declarations (Needs the original line to capture comments)
       if (currentVarSection && (currentFunctionBlock || currentProgram || currentFunction)) {
-        const varDeclarationMatch = line.match(varDeclarationRegex);
+
+        // Use the 'processedLine' which has comments stripped by the main logic earlier.
+        // If it's empty, the original line was only comments or whitespace.
+        if (line === '') { // 'line' here refers to 'processedLine' from the earlier block
+             continue; // Skip comment-only or empty lines
+        }
+
+        // If 'processedLine' is not empty, attempt to match a variable declaration
+        // using the 'originalLine' to capture potential comments.
+        const varDeclarationMatch = originalLine.match(varDeclarationRegex);
 
         if (varDeclarationMatch) {
+          // Successfully matched a variable declaration
           const name = varDeclarationMatch[1];
           const type = varDeclarationMatch[2];
-          const initialValue = varDeclarationMatch[3];
-          const comment = varDeclarationMatch[4];
+          const initialValue = varDeclarationMatch[3]?.trim(); // Trim potential whitespace
+          // Capture everything after the semicolon as the raw comment string (group 4)
+          let rawComment = varDeclarationMatch[4];
+          let processedComment: string | undefined = undefined;
+
+          if (rawComment) {
+              rawComment = rawComment.trim();
+              if (rawComment.startsWith('//')) {
+                  processedComment = rawComment.substring(2).trim(); // Remove '//' and trim
+              } else if (rawComment.startsWith('(*') && rawComment.endsWith('*)')) {
+                  processedComment = rawComment.substring(2, rawComment.length - 2).trim(); // Remove '(*' and '*)' and trim
+              } else {
+                   // Handle cases like multiple comments or unexpected format - maybe just keep raw?
+                   // For now, let's assume the most common formats are handled above.
+                   // If it's not a standard comment format, maybe it shouldn't be treated as a comment?
+                   // Let's assign the trimmed raw string if it doesn't match known markers,
+                   // although this might capture unintended things.
+                   // A stricter approach might be preferable later.
+                   processedComment = rawComment; // Keep as is if markers aren't standard
+              }
+          }
+
 
           const variable: PLCVariable = {
             name,
             type,
             scope: currentVarSection,
-            comment,
+            lineNumber, // Assign the current line number
+            // Only add comment property if a processed comment exists and is not empty
+            ...(processedComment && { comment: processedComment }),
           };
 
-          if (initialValue) {
+          if (initialValue !== undefined) { // Check for undefined explicitly
             variable.initialValue = initialValue;
           }
 
@@ -251,17 +411,69 @@ export function parsePLCCode(code: string): ParserResult {
             currentFunctionBlock.variables.push(variable);
           } else if (currentProgram) {
             currentProgram.variables.push(variable);
-          } else if (currentFunction) { // VAR, VAR_INPUT, VAR_OUTPUT, VAR_IN_OUT in Function
-             currentFunction.parameters.push(variable); // Treat all as parameters for now, refine later if needed
+          } else if (currentFunction) {
+             // Differentiate between parameter types and local VARs within a FUNCTION
+             if (currentVarSection === 'VAR_INPUT' || currentVarSection === 'VAR_OUTPUT' || currentVarSection === 'VAR_IN_OUT') {
+                 currentFunction.parameters.push(variable); // These are actual parameters
+             } else if (currentVarSection === 'VAR') {
+                 currentFunction.localVariables.push(variable); // Plain VAR should be local
+             }
+             // VAR_TEMP is handled earlier
           }
 
           continue;
+        } else {
+          // Line is not just a comment/empty, but also doesn't match the variable declaration format
+          result.errors.push({
+            message: `Invalid syntax in variable declaration section.`,
+            lineNumber,
+            columnStart: originalLine.search(/\S/) + 1 // Report at the first non-whitespace character of original line
+          });
+          continue; // Move to the next line
         }
       }
 
       // Track implementation code (within Method, Property, Function Block, Program, Function)
       if (currentMethod || currentProperty || currentFunctionBlock || currentProgram || currentFunction) {
-         // Check for IF statement start
+         // --- Check for Statements (Assignment, IF, etc.) ---
+
+         // Check for Assignment FIRST, as it's simpler
+         const assignmentMatch = line.match(assignmentRegex);
+         if (assignmentMatch) {
+             const targetVariable = assignmentMatch[1];
+             const sourceExpression = assignmentMatch[2];
+             const statement: PLCAssignmentStatement = {
+               type: 'assignment',
+               targetVariable,
+               sourceExpression,
+               lineNumber
+             };
+
+             // Add statement to the correct place (current IF block or main POU body)
+             if (currentIfStatement && currentIfBlockType) {
+                 if (currentIfBlockType === 'then') {
+                     currentIfStatement.thenStatements.push(statement);
+                 } else if (currentIfBlockType === 'elsif' && currentIfStatement.elseIfStatements) {
+                     currentIfStatement.elseIfStatements[currentIfStatement.elseIfStatements.length - 1].statements.push(statement);
+                 } else if (currentIfBlockType === 'else' && currentIfStatement.elseStatements) {
+                     currentIfStatement.elseStatements.push(statement);
+                 }
+             } else if (currentMethod) { // Add to Method body
+                 currentMethod.statements?.push(statement);
+             } else if (currentProperty) { // Add to Property body
+                 currentProperty.statements?.push(statement);
+             } else if (currentProgram) { // Add to Program body
+                 currentProgram.statements?.push(statement);
+             } else if (currentFunction) { // Add to Function body
+                 currentFunction.statements?.push(statement);
+             } else if (currentFunctionBlock) { // Add to Function Block body
+                 currentFunctionBlock.statements?.push(statement);
+             }
+
+             continue; // Handled assignment, move to next line
+         }
+
+         // Check for IF statement start (only if not an assignment)
          const ifMatch = line.match(ifRegex);
          if (ifMatch) {
              const newIfStatement: PLCIfStatement = {
@@ -286,11 +498,11 @@ export function parsePLCCode(code: string): ParserResult {
              } else if (currentProperty) {
                  currentProperty.statements?.push(newIfStatement);
              } else if (currentFunctionBlock) { // Add to FB statements
-                 // currentFunctionBlock.statements?.push(newIfStatement); // FB body statements not parsed yet
+                 currentFunctionBlock.statements?.push(newIfStatement);
              } else if (currentProgram) { // Add to Program statements
-                 // currentProgram.statements?.push(newIfStatement); // Program body statements not parsed yet
+                 currentProgram.statements?.push(newIfStatement); // Add to Program statements
              } else if (currentFunction) { // Add to Function statements
-                 // currentFunction.statements?.push(newIfStatement); // Function body statements not parsed yet
+                 currentFunction.statements?.push(newIfStatement); // Add to Function statements
              }
 
 
@@ -342,48 +554,18 @@ export function parsePLCCode(code: string): ParserResult {
              continue; // Process next line
            }
 
-           // If none of the IF control keywords matched, parse as a regular statement
-           const assignmentMatch = line.match(assignmentRegex);
-           if (assignmentMatch) {
-             const targetVariable = assignmentMatch[1];
-             const sourceExpression = assignmentMatch[2];
-             const statement: PLCAssignmentStatement = { // Use 'statement' variable name
-               type: 'assignment',
-               targetVariable,
-               sourceExpression,
-               lineNumber
-             };
-
-             // Add the statement to the correct block (THEN, ELSIF, ELSE)
-             if (currentIfBlockType === 'then') {
-               currentIfStatement.thenStatements.push(statement);
-             } else if (currentIfBlockType === 'elsif' && currentIfStatement.elseIfStatements) {
-               currentIfStatement.elseIfStatements[currentIfStatement.elseIfStatements.length - 1].statements.push(statement);
-             } else if (currentIfBlockType === 'else' && currentIfStatement.elseStatements) {
-               currentIfStatement.elseStatements.push(statement);
-             } else {
-                  // Should not happen if logic is correct, but add to main statements as fallback
-                  if (currentMethod) {
-                      currentMethod.statements?.push(statement);
-                  } else if (currentProperty) {
-                      currentProperty.statements?.push(statement);
-                  } else if (currentFunctionBlock) {
-                      // currentFunctionBlock.statements?.push(statement); // FB body statements not parsed yet
-                  } else if (currentProgram) {
-                      // currentProgram.statements?.push(statement); // Program body statements not parsed yet
-                  } else if (currentFunction) {
-                      // currentFunction.statements?.push(statement); // Function body statements not parsed yet
-                  }
-             }
-             continue; // Process next line
-           }
-
-           // If line is not an IF control keyword or a recognized statement,
-           // it's part of the implementation but not parsed into a specific statement type yet.
-           // We can add it to the implementationBuffer if needed, but for now, just continue.
-           // implementationBuffer += lines[i] + '\n'; // Keep raw buffer
+           // If none of the IF control keywords matched inside the IF block,
+           // AND it wasn't an assignment (handled earlier),
+           // then it's some other statement type within the IF block that we don't parse yet.
+           // Or it could be part of a multi-line expression within the IF condition/assignment.
+           // For now, just continue.
+           // implementationBuffer += lines[i] + '\n'; // Optionally keep raw buffer
            continue; // Process next line
          }
+
+         // If the line wasn't an assignment or an IF start, and we are not inside an IF,
+         // it's some other statement type in the main POU body that we don't parse yet.
+         // implementationBuffer += lines[i] + '\n'; // Optionally keep raw buffer
 
 
          // If not inside an IF statement, parse other statements within the current POU/Method/Property
@@ -421,9 +603,9 @@ export function parsePLCCode(code: string): ParserResult {
                  } else if (currentFunctionBlock) {
                     // currentFunctionBlock.statements?.push(statement); // FB body statements not parsed yet
                  } else if (currentProgram) {
-                    // currentProgram.statements?.push(statement); // Program body statements not parsed yet
+                    currentProgram.statements?.push(statement); // Add to Program statements
                  } else if (currentFunction) {
-                    // currentFunction.statements?.push(statement); // Function body statements not parsed yet
+                    currentFunction.statements?.push(statement); // Add to Function statements
                  }
                }
              }
@@ -453,110 +635,14 @@ export function parsePLCCode(code: string): ParserResult {
       }
 
 
-      // Check for end of POU/Method/Property
-      const endMethodMatch = line.match(endMethodRegex);
-      const endPropertyMatch = line.match(/END_PROPERTY/);
-      const endFunctionBlockMatch = line.match(endFunctionBlockRegex);
-      const endProgramMatch = line.match(endProgramRegex);
-      const endFunctionMatch = line.match(endFunctionRegex);
-
-
-      if (endMethodMatch && currentMethod) {
-        // For methods without implementation blocks (if any)
-        if (!inImplementation && currentMethod) {
-           // Process any remaining implementationBuffer if no brackets were used
-           // This case might need refinement depending on expected ST syntax variations
-           currentMethod.implementation = implementationBuffer;
-           implementationBuffer = '';
-           // If any statements were parsed before END_METHOD without brackets,
-           // they are already in currentMethod.statements
-           // No need to clear statements here
-           currentMethod = null;
-        } else if (inImplementation && bracketDepth === 0 && !currentIfStatement) {
-             // Handle case where END_METHOD is on the same line as the closing bracket
-             currentMethod.implementation = implementationBuffer;
-             implementationBuffer = '';
-             currentMethod = null;
-             inImplementation = false;
-        }
-        continue;
-      } else if (endPropertyMatch && currentProperty) {
-           // For properties without implementation blocks (if any)
-           if (!inImplementation && currentProperty) {
-               currentProperty.implementation += implementationBuffer;
-               implementationBuffer = '';
-               // If any statements were parsed before END_PROPERTY without brackets,
-               // they are already in currentProperty.statements
-               // No need to clear statements here
-               currentProperty = null;
-           } else if (inImplementation && bracketDepth === 0 && !currentIfStatement) {
-                // Handle case where END_PROPERTY is on the same line as the closing bracket
-                currentProperty.implementation += implementationBuffer;
-                implementationBuffer = '';
-                currentProperty = null;
-                inImplementation = false;
-           }
-           continue;
-       } else if (endFunctionBlockMatch && currentFunctionBlock) {
-           currentFunctionBlock = null;
-           currentMethod = null; // Ensure nested elements are cleared
-           currentProperty = null; // Ensure nested elements are cleared
-           currentVarSection = null; // Ensure var section is reset
-           implementationBuffer = ''; // Clear buffer for FB body (if we parse it later)
-           inImplementation = false; // Ensure implementation flag is reset
-           bracketDepth = 0; // Ensure bracket depth is reset
-           // Also check if any IF statements were left unclosed within the FB body
-           if (ifStatementStack.length > 0) {
-                result.errors.push({
-                    message: 'Unclosed IF statement(s) at end of Function Block',
-                    lineNumber: lineNumber
-                });
-                ifStatementStack = []; // Clear the stack
-                currentIfStatement = null;
-                currentIfBlockType = null;
-           }
-           continue;
-       } else if (endProgramMatch && currentProgram) {
-           currentProgram = null;
-           currentVarSection = null; // Ensure var section is reset
-           implementationBuffer = ''; // Clear buffer for Program body (if we parse it later)
-           inImplementation = false; // Ensure implementation flag is reset
-           bracketDepth = 0; // Ensure bracket depth is reset
-            // Also check if any IF statements were left unclosed within the Program body
-            if (ifStatementStack.length > 0) {
-                 result.errors.push({
-                     message: 'Unclosed IF statement(s) at end of Program',
-                     lineNumber: lineNumber
-                 });
-                 ifStatementStack = []; // Clear the stack
-                 currentIfStatement = null;
-                 currentIfBlockType = null;
-            }
-           continue;
-       } else if (endFunctionMatch && currentFunction) {
-           currentFunction = null;
-           currentVarSection = null; // Ensure var section is reset
-           implementationBuffer = ''; // Clear buffer for Function body (if we parse it later)
-           inImplementation = false; // Ensure implementation flag is reset
-           bracketDepth = 0; // Ensure bracket depth is reset
-            // Also check if any IF statements were left unclosed within the Function body
-            if (ifStatementStack.length > 0) {
-                 result.errors.push({
-                     message: 'Unclosed IF statement(s) at end of Function',
-                     lineNumber: lineNumber
-                 });
-                 ifStatementStack = []; // Clear the stack
-                 currentIfStatement = null;
-                 currentIfBlockType = null;
-            }
-           continue;
-       }
+      // (The END keyword checks have been moved earlier)
 
 
     } catch (error) {
       result.errors.push({
         message: `Parser error on line ${lineNumber}: ${error}`,
-        lineNumber
+        lineNumber,
+        // columnStart: error.column // Add column if available from error object
       });
     }
   }
@@ -565,44 +651,51 @@ export function parsePLCCode(code: string): ParserResult {
   if (currentFunctionBlock) {
     result.errors.push({
       message: 'Unclosed function block: ' + currentFunctionBlock.name,
-      lineNumber: currentFunctionBlock.lineNumber
+      lineNumber: currentFunctionBlock.lineNumber,
+      columnStart: currentFunctionBlock.columnStart // Add column start from FB object
     });
   }
    if (currentProgram) {
        result.errors.push({
            message: 'Unclosed program: ' + currentProgram.name,
-           lineNumber: currentProgram.lineNumber
+           lineNumber: currentProgram.lineNumber,
+           columnStart: currentProgram.columnStart // Add column start from Program object
        });
    }
     if (currentFunction) {
         result.errors.push({
             message: 'Unclosed function: ' + currentFunction.name,
-            lineNumber: currentFunction.lineNumber
+            lineNumber: currentFunction.lineNumber,
+            columnStart: currentFunction.columnStart // Add column start from Function object
         });
     }
    if (currentMethod) {
        result.errors.push({
            message: 'Unclosed method: ' + currentMethod.name,
-           lineNumber: currentMethod.lineNumber
+           lineNumber: currentMethod.lineNumber,
+           columnStart: currentMethod.columnStart // Add column start from Method object
        });
    }
     if (currentProperty) {
         result.errors.push({
             message: 'Unclosed property: ' + currentProperty.name,
-            lineNumber: currentProperty.lineNumber
+            lineNumber: currentProperty.lineNumber,
+            columnStart: currentProperty.columnStart // Add column start from Property object
         });
     }
     // Add error for unclosed IF statements at the very end of the file
     if (ifStatementStack.length > 0) {
         result.errors.push({
             message: 'Unclosed IF statement(s) at end of file',
-            lineNumber: lines.length // Report at the end of the file
+            lineNumber: lines.length, // Report at the end of the file
+            columnStart: 1 // Generic column 1 for end-of-file errors
         });
     }
    if (inBlockComment) {
        result.errors.push({
            message: 'Unclosed block comment',
-           lineNumber: lines.length // Report at the end of the file
+           lineNumber: lines.length, // Report at the end of the file
+           columnStart: 1 // Generic column 1 for end-of-file errors
        });
    }
 
@@ -646,6 +739,7 @@ function parseParameters(paramString: string): PLCVariable[] {
       name,
       type,
       scope: currentScope,
+      lineNumber: 0, // Placeholder: Line number not available in this context
       // initialValue and comment are not typically part of parameter declarations
     });
   }
@@ -653,6 +747,37 @@ function parseParameters(paramString: string): PLCVariable[] {
   return parsedParams;
 }
 
+// Helper function to recursively generate ST code string for statements
+function generateSTStatementString(statement: PLCStatement, indentLevel = 0): string {
+  const indent = '  '.repeat(indentLevel);
+  let statementString = '';
+
+  if (statement.type === 'assignment') {
+    statementString = `${indent}${statement.targetVariable} := ${statement.sourceExpression};`;
+  } else if (statement.type === 'if') {
+    statementString += `${indent}IF ${statement.condition} THEN\n`;
+    statement.thenStatements.forEach(stmt => {
+      statementString += generateSTStatementString(stmt, indentLevel + 1) + '\n';
+    });
+    statement.elseIfStatements?.forEach(elsifBlock => {
+      statementString += `${indent}ELSIF ${elsifBlock.condition} THEN\n`;
+      elsifBlock.statements.forEach(stmt => {
+        statementString += generateSTStatementString(stmt, indentLevel + 1) + '\n';
+      });
+    });
+    if (statement.elseStatements) {
+      statementString += `${indent}ELSE\n`;
+      statement.elseStatements.forEach(stmt => {
+        statementString += generateSTStatementString(stmt, indentLevel + 1) + '\n';
+      });
+    }
+    statementString += `${indent}END_IF;`; // Add semicolon for standard ST
+  }
+  // Add other statement types (CASE, FOR, WHILE, etc.) here later
+
+  // Trim trailing newline if any was added unnecessarily
+  return statementString.trimEnd();
+}
 // Helper function to convert parsed data to PLCopen XML format
 export function generatePLCopenXML(data: ParserResult): string {
   let xml = '<?xml version="1.0" encoding="utf-8"?>\n';
@@ -773,94 +898,48 @@ export function generatePLCopenXML(data: ParserResult): string {
            xml += `          <p>END_VAR</p>\n`;
        }
 
-      // Use parsed statements if available, otherwise fallback to raw implementation
+      // Generate method body using the helper function
+      let methodBody = '';
       if (method.statements && method.statements.length > 0) {
-        method.statements.forEach(stmt => {
-          if (stmt.type === 'assignment') {
-            // Wrap assignment in CDATA
-            xml += `          <p><![CDATA[${stmt.targetVariable} := ${stmt.sourceExpression};]]></p>\n`;
-          } else if (stmt.type === 'if') {
-             // Basic representation of IF statement in XML with CDATA
-             xml += `          <p><![CDATA[IF ${stmt.condition} THEN]]></p>\n`;
-             // Recursively add statements within THEN block
-             stmt.thenStatements.forEach(thenStmt => {
-                 if (thenStmt.type === 'assignment') {
-                     xml += `          <p><![CDATA[  ${thenStmt.targetVariable} := ${thenStmt.sourceExpression};]]></p>\n`; // Indented basic representation
-                 }
-                 // Add other statement types here later
-             });
-             // Add ELSIF blocks
-             stmt.elseIfStatements?.forEach(elsifBlock => {
-                 xml += `          <p><![CDATA[ELSIF ${elsifBlock.condition} THEN]]></p>\n`;
-                 elsifBlock.statements.forEach(elsifStmt => {
-                      if (elsifStmt.type === 'assignment') {
-                          xml += `          <p><![CDATA[  ${elsifStmt.targetVariable} := ${elsifStmt.sourceExpression};]]></p>\n`; // Indented basic representation
-                      }
-                 });
-             });
-             // Add ELSE block
-             if (stmt.elseStatements) {
-                 xml += `          <p><![CDATA[ELSE]]></p>\n`;
-                 stmt.elseStatements.forEach(elseStmt => {
-                      if (elseStmt.type === 'assignment') {
-                          xml += `          <p><![CDATA[  ${elseStmt.targetVariable} := ${elseStmt.sourceExpression};]]></p>\n`; // Indented basic representation
-                      }
-                 });
-             }
-             xml += `          <p><![CDATA[END_IF]]></p>\n`; // Add END_IF
-          }
-          // Add other statement types here later
-        });
-      } else {
-        xml += `          <p><![CDATA[${method.implementation}]]></p>\n`; // Fallback to raw with CDATA
+        methodBody = method.statements.map(stmt => generateSTStatementString(stmt, 1)).join('\n'); // Start with indent level 1
+      } else if (method.implementation) {
+        // Fallback to raw implementation if no parsed statements
+        methodBody = method.implementation.trim(); // Trim whitespace from raw implementation
+      }
+      // Wrap the entire generated body in CDATA
+      if (methodBody) {
+        xml += `          <p><![CDATA[\n${methodBody}\n          ]]></p>\n`;
       }
       xml += `          <p>END_METHOD</p>\n\n`; // Keep for now in XML output
     });
 
     fb.properties.forEach(prop => {
       xml += `          <p>PROPERTY ${prop.name}: ${prop.type}</p>\n`;
-      // Use parsed statements if available, otherwise fallback to raw implementation
+      // Generate property body using the helper function
+      let propertyBody = '';
       if (prop.statements && prop.statements.length > 0) {
-        prop.statements.forEach(stmt => {
-          if (stmt.type === 'assignment') {
-            xml += `          <p><![CDATA[${stmt.targetVariable} := ${stmt.sourceExpression};]]></p>\n`; // Basic representation with CDATA
-          } else if (stmt.type === 'if') {
-             // Basic representation of IF statement in XML with CDATA
-             xml += `          <p><![CDATA[IF ${stmt.condition} THEN]]></p>\n`;
-             // Recursively add statements within THEN block
-             stmt.thenStatements.forEach(thenStmt => {
-                 if (thenStmt.type === 'assignment') {
-                     xml += `          <p><![CDATA[  ${thenStmt.targetVariable} := ${thenStmt.sourceExpression};]]></p>\n`; // Indented basic representation
-                 }
-                 // Add other statement types here later
-             });
-             // Add ELSIF blocks
-             stmt.elseIfStatements?.forEach(elsifBlock => {
-                 xml += `          <p><![CDATA[ELSIF ${elsifBlock.condition} THEN]]></p>\n`;
-                 elsifBlock.statements.forEach(elsifStmt => {
-                      if (elsifStmt.type === 'assignment') {
-                          xml += `          <p><![CDATA[  ${elsifStmt.targetVariable} := ${elsifStmt.sourceExpression};]]></p>\n`; // Indented basic representation
-                      }
-                 });
-             });
-             // Add ELSE block
-             if (stmt.elseStatements) {
-                 xml += `          <p><![CDATA[ELSE]]></p>\n`;
-                 stmt.elseStatements.forEach(elseStmt => {
-                      if (elseStmt.type === 'assignment') {
-                          xml += `          <p><![CDATA[  ${elseStmt.targetVariable} := ${elseStmt.sourceExpression};]]></p>\n`; // Indented basic representation
-                      }
-                 });
-             }
-             xml += `          <p><![CDATA[END_IF]]></p>\n`; // Add END_IF
-          }
-          // Add other statement types here later
-        });
-      } else {
-        xml += `          <p><![CDATA[${prop.implementation}]]></p>\n`; // Fallback to raw with CDATA
+        propertyBody = prop.statements.map(stmt => generateSTStatementString(stmt, 1)).join('\n'); // Start with indent level 1
+      } else if (prop.implementation) {
+        // Fallback to raw implementation if no parsed statements
+        propertyBody = prop.implementation.trim(); // Trim whitespace
+      }
+      // Wrap the entire generated body in CDATA
+      if (propertyBody) {
+         xml += `          <p><![CDATA[\n${propertyBody}\n          ]]></p>\n`;
       }
       xml += `          <p>END_PROPERTY</p>\n\n`;
     });
+
+    // Generate the main FB body statements (if any)
+    let fbBody = '';
+    if (fb.statements && fb.statements.length > 0) {
+        fbBody = fb.statements.map(stmt => generateSTStatementString(stmt, 0)).join('\n');
+    }
+    // Wrap the entire generated body in CDATA
+    if (fbBody) {
+        // Remove the surrounding <p> tag for the main FB body
+        xml += `          <![CDATA[\n${fbBody}\n          ]]>\n`;
+    }
 
     xml += '          </xhtml>\n';
     xml += '        </ST>\n';
@@ -901,9 +980,16 @@ export function generatePLCopenXML(data: ParserResult): string {
       xml += '        <ST>\n';
       xml += '          <xhtml xmlns="http://www.w3.org/1999/xhtml">\n';
 
-      // Add program body statements (if parsed later) or raw implementation
-      // For now, we don't parse program body statements, so no output here yet.
-      // If we had a raw implementation buffer for programs, we'd add it here.
+      // Generate program body using the helper function
+      let programBody = '';
+      if (program.statements && program.statements.length > 0) {
+          programBody = program.statements.map(stmt => generateSTStatementString(stmt, 0)).join('\n');
+      }
+      // Wrap the entire generated body in CDATA
+      if (programBody) {
+          // Remove the surrounding <p> tag for the main Program body
+          xml += `          <![CDATA[\n${programBody}\n          ]]>\n`;
+      }
 
       xml += '          </xhtml>\n';
       xml += '        </ST>\n';
@@ -966,9 +1052,16 @@ export function generatePLCopenXML(data: ParserResult): string {
       xml += '        <ST>\n';
       xml += '          <xhtml xmlns="http://www.w3.org/1999/xhtml">\n';
 
-      // Add function body statements (if parsed later) or raw implementation
-      // For now, we don't parse function body statements, so no output here yet.
-      // If we had a raw implementation buffer for functions, we'd add it here.
+      // Generate function body using the helper function
+      let functionBody = '';
+      if (func.statements && func.statements.length > 0) {
+          functionBody = func.statements.map(stmt => generateSTStatementString(stmt, 0)).join('\n');
+      }
+       // Wrap the entire generated body in CDATA
+       if (functionBody) {
+           // Remove the surrounding <p> tag for the main Function body
+           xml += `          <![CDATA[\n${functionBody}\n          ]]>\n`;
+       }
 
       xml += '          </xhtml>\n';
       xml += '        </ST>\n';

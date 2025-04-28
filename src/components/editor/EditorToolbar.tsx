@@ -7,19 +7,26 @@ import { FileManager } from "./FileManager";
 import { usePLCCode } from "@/hooks/usePLCCode";
 import { toast } from "@/components/ui/sonner";
 
+import { PanelLeft } from "lucide-react"; // Import PanelLeft
+
 interface EditorToolbarProps {
   onInsertTemplate: (template: string) => void;
   activeFileId?: string | null;
   onFileSelect?: (file: any) => void;
   onNewFile?: () => void;
+  isMobileSidebarOpen?: boolean; // Add prop for state
+  setIsMobileSidebarOpen?: (open: boolean) => void; // Add prop for setter
 }
 
 export const EditorToolbar = ({ 
   onInsertTemplate, 
   activeFileId = null,
   onFileSelect,
-  onNewFile
+  onNewFile,
+  isMobileSidebarOpen, // Destructure new props
+  setIsMobileSidebarOpen, // Destructure new props
 }: EditorToolbarProps) => {
+  // Reinstate the hook call to get mutations and their states
   const { plcCodes, isLoading, deletePLCCode, duplicatePLCCode } = usePLCCode();
   
   const functionBlockTemplate = `FUNCTION_BLOCK NewFunctionBlock
@@ -61,28 +68,31 @@ SET
 }
 END_PROPERTY`;
 
-  const handleDeleteFile = async (id: string) => {
-    try {
-      await deletePLCCode.mutateAsync(id);
-      toast.success("File deleted successfully");
-    } catch (error) {
-      console.error("Failed to delete file:", error);
-      toast.error("Failed to delete file");
-    }
+  // Wrapper functions calling mutate (no async/await needed here)
+  // Toast notifications are handled by the hook's onSuccess/onError
+  const handleDeleteFile = (id: string) => {
+    deletePLCCode.mutate(id);
   };
-  
-  const handleDuplicateFile = async (id: string, title: string) => {
-    try {
-      await duplicatePLCCode.mutateAsync({ id, title });
-      toast.success("File duplicated successfully");
-    } catch (error) {
-      console.error("Failed to duplicate file:", error);
-      toast.error("Failed to duplicate file");
-    }
+
+  const handleDuplicateFile = (id: string, title: string) => {
+    duplicatePLCCode.mutate({ id, title });
   };
 
   return (
     <div className="flex items-center gap-2 p-2 border-b overflow-x-auto">
+      {/* Mobile Sidebar Toggle Button */}
+      {setIsMobileSidebarOpen && (
+        <Button
+          variant="outline"
+          size="icon"
+          className="md:hidden" // Only show on small screens
+          onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+        >
+          <PanelLeft className="h-5 w-5" />
+          <span className="sr-only">Toggle Sidebar</span>
+        </Button>
+      )}
+
       <div className="flex items-center gap-2">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -132,15 +142,20 @@ END_PROPERTY`;
       
       <div className="border-l h-8 mx-2"></div>
       
+      {/* Pass down handlers and loading states from the hook */}
       {onFileSelect && onNewFile && (
-        <FileManager 
+        <FileManager
           files={plcCodes || []}
           isLoading={isLoading}
           activeFileId={activeFileId}
           onFileSelect={onFileSelect}
           onNewFile={onNewFile}
+          // Pass the wrapper handlers
           onDeleteFile={handleDeleteFile}
           onDuplicateFile={handleDuplicateFile}
+          // Pass the pending states from the hook
+          isDeleting={deletePLCCode.isPending}
+          isDuplicating={duplicatePLCCode.isPending}
         />
       )}
       
