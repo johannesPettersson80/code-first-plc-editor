@@ -16,6 +16,8 @@ import { toast } from "@/components/ui/sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Save, Check } from "lucide-react";
 import { PLCCodeEntry } from "@/hooks/usePLCCode";
+import { ShortcutsHelp } from "./editor/ShortcutsHelp";
+import { EditorTour } from "./editor/EditorTour";
 
 interface PLCEditorProps {
   darkMode: boolean;
@@ -350,7 +352,10 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
           toggleAutoSave={toggleAutoSave}
           lastSavedText={formatLastSaved()}
           isSaving={isSaving}
-        />
+        >
+          <ShortcutsHelp />
+        </EditorHeader>
+        
         <EditorToolbar 
           onInsertTemplate={insertTemplate}
           activeFileId={activeCodeId}
@@ -367,7 +372,7 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
           />
           
           <div className="flex-grow flex flex-col">
-            <div className="flex-grow" ref={editorRef}></div>
+            <div id="editor" className="flex-grow" ref={editorRef}></div>
             
             {parserResult.errors.length > 0 && (
               <div className="border-t p-2 bg-red-50 dark:bg-red-900/20">
@@ -402,6 +407,8 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
           </div>
         </div>
       </div>
+      
+      <EditorTour />
       
       <AlertDialog open={!!pendingOperation} onOpenChange={(open) => !open && setPendingOperation(null)}>
         <AlertDialogContent>
