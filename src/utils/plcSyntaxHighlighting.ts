@@ -2,6 +2,27 @@
 // Monaco editor language definition for IEC 61131-3 Structured Text
 
 export const configurePLCSyntaxHighlighting = (monaco: any) => {
+  const keywords = [
+    'FUNCTION_BLOCK', 'END_FUNCTION_BLOCK', 'METHOD', 'END_METHOD',
+    'PROPERTY', 'END_PROPERTY', 'GET', 'SET',
+    'VAR', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT', 'VAR_TEMP', 'END_VAR',
+    'IF', 'THEN', 'ELSE', 'ELSIF', 'END_IF',
+    'CASE', 'OF', 'END_CASE',
+    'FOR', 'TO', 'BY', 'DO', 'END_FOR',
+    'WHILE', 'DO', 'END_WHILE',
+    'REPEAT', 'UNTIL', 'END_REPEAT',
+    'CONTINUE', 'EXIT', 'RETURN',
+    'TRUE', 'FALSE', 'NOT', 'AND', 'OR', 'XOR'
+  ];
+
+  const typeKeywords = [
+    'BOOL', 'BYTE', 'WORD', 'DWORD', 'LWORD',
+    'SINT', 'INT', 'DINT', 'LINT',
+    'USINT', 'UINT', 'UDINT', 'ULINT',
+    'REAL', 'LREAL', 'TIME', 'DATE', 'TOD', 'DT',
+    'STRING', 'WSTRING', 'ARRAY', 'STRUCT', 'END_STRUCT'
+  ];
+
   // Register a new language
   monaco.languages.register({ id: 'plcStructuredText' });
 
@@ -10,26 +31,8 @@ export const configurePLCSyntaxHighlighting = (monaco: any) => {
     // Set defaultToken to invalid to see what you do not tokenize yet
     defaultToken: 'invalid',
 
-    keywords: [
-      'FUNCTION_BLOCK', 'END_FUNCTION_BLOCK', 'METHOD', 'END_METHOD',
-      'PROPERTY', 'END_PROPERTY', 'GET', 'SET',
-      'VAR', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT', 'VAR_TEMP', 'END_VAR',
-      'IF', 'THEN', 'ELSE', 'ELSIF', 'END_IF',
-      'CASE', 'OF', 'END_CASE',
-      'FOR', 'TO', 'BY', 'DO', 'END_FOR',
-      'WHILE', 'DO', 'END_WHILE',
-      'REPEAT', 'UNTIL', 'END_REPEAT',
-      'CONTINUE', 'EXIT', 'RETURN',
-      'TRUE', 'FALSE', 'NOT', 'AND', 'OR', 'XOR'
-    ],
-
-    typeKeywords: [
-      'BOOL', 'BYTE', 'WORD', 'DWORD', 'LWORD',
-      'SINT', 'INT', 'DINT', 'LINT',
-      'USINT', 'UINT', 'UDINT', 'ULINT',
-      'REAL', 'LREAL', 'TIME', 'DATE', 'TOD', 'DT',
-      'STRING', 'WSTRING', 'ARRAY', 'STRUCT', 'END_STRUCT'
-    ],
+    keywords: keywords,
+    typeKeywords: typeKeywords,
 
     operators: [
       '=', '>', '<', '!', '~', '?', ':',
@@ -160,6 +163,8 @@ export const configurePLCSyntaxHighlighting = (monaco: any) => {
       'editorWhitespace.foreground': '#3B3B3B'
     }
   });
+
+  return { keywords, typeKeywords }; // Return keywords and typeKeywords
 };
 
 export const getDefaultPLCCode = (): string => {

@@ -85,6 +85,70 @@ const PLCEditor = ({ darkMode }: PLCEditorProps) => {
           folding: true,
         });
 
+        // Register completion item provider
+        monaco.languages.registerCompletionItemProvider('plcStructuredText', {
+          provideCompletionItems: (model: editor.ITextModel, position: editor.Position) => {
+            const word = model.getWordUntilPosition(position);
+            const range = {
+              startLineNumber: position.lineNumber,
+              endLineNumber: position.lineNumber,
+              startColumn: word.startColumn,
+              endColumn: word.endColumn,
+            };
+
+            // Get keywords and type keywords from syntax highlighting definition
+            const syntaxKeywords = configurePLCSyntaxHighlighting(monaco);
+            const keywords = syntaxKeywords.keywords.map((keyword: string) => ({
+              label: keyword,
+              kind: monaco.languages.CompletionItemKind.Keyword,
+              insertText: keyword,
+              range: range,
+            }));
+             const typeKeywords = syntaxKeywords.typeKeywords.map((keyword: string) => ({
+               label: keyword,
+               kind: monaco.languages.CompletionItemKind.TypeParameter,
+               insertText: keyword,
+               range: range,
+             }));
+
+
+            // Get variables from parser result
+            const variables = new Set<string>();
+            parserResult.functionBlocks.forEach(fb => {
+              fb.variables.forEach(v => variables.add(v.name));
+              fb.methods.forEach(m => {
+                m.parameters.forEach(v => variables.add(v.name));
+                m.localVariables.forEach(v => variables.add(v.name));
+              });
+              fb.properties.forEach(p => {
+                 // Properties themselves can be used
+                 variables.add(p.name);
+                 // Variables within GET/SET (if parsed) would go here
+              });
+            });
+            parserResult.programs.forEach(p => {
+              p.variables.forEach(v => variables.add(v.name));
+            });
+             parserResult.functions.forEach(f => {
+               f.parameters.forEach(v => variables.add(v.name));
+               f.localVariables.forEach(v => variables.add(v.name));
+             });
+
+
+            const variableSuggestions = Array.from(variables).map(variable => ({
+              label: variable,
+              kind: monaco.languages.CompletionItemKind.Variable,
+              insertText: variable,
+              range: range,
+            }));
+
+            return {
+              suggestions: [...keywords, ...typeKeywords, ...variableSuggestions],
+            };
+          },
+        });
+
+
         monacoEditorRef.current.onDidChangeModelContent(() => {
           const newCode = monacoEditorRef.current?.getValue() || "";
           setCode(newCode);
